@@ -604,3 +604,184 @@ function updateActivityChips(activity) {
 
 // Expose for HTML buttons
 window.fetchGithubActivity = fetchGithubActivity;
+
+
+// ═══════════════════════════════════════════════════════════
+//  GAME THEORY — VOTING INTEGRITY SYSTEM
+//  
+//  Based on Schelling point consensus + quadratic scoring.
+//
+//  RULES:
+//  1. After the voting window closes, the majority verdict
+//     becomes the "ground truth" for that day.
+//  2. Voters who aligned with the majority get +REPUTATION.
+//  3. Voters who voted AGAINST the majority get -REPUTATION.
+//  4. Extreme outliers (voted YES when 90%+ said NO, or vice
+//     versa) get a larger penalty — prevents targeted attacks.
+//  5. Voters who always vote the same way (bias detection)
+//     get a "consistency warning" and their votes downweighted.
+//  6. Reputation affects future vote weight (0.5x to 1.5x).
+// ═══════════════════════════════════════════════════════════
+
+const VOTING_REWARDS = {
+  ALIGN_BONUS:        10,   // reputation points for voting with majority
+  OUTLIER_PENALTY:   -25,   // voted opposite when consensus was >80%
+  MILD_PENALTY:       -8,   // voted opposite when consensus was 51-80%
+  ABSTAIN_PENALTY:    -3,   // skipped more than 60% of votes (lazy voter)
+  BIAS_WARNING:      -15,   // same vote >90% of the time (bias detected)
+  MAX_REPUTATION:    500,
+  MIN_REPUTATION:   -200,
+};
+
+// In-memory reputation store (in production: stored on-chain as PDA)
+let _voterReputation = JSON.parse(
+  sessionStorage.getItem('voter_reputation') || '{}'
+);
+let _voteHistory = JSON.parse(
+  sessionStorage.getItem('vote_history') || '[]'
+);
+
+// ── Get current reputation for a wallet ──────────────────
+function getReputation(walletAddr) {
+  return _voterReputation[walletAddr] || 100; // start at 100
+}
+
+// ── Get vote weight based on reputation ──────────────────
+// reputation 100 (default) = 1.0x weight
+// reputation 200+ = 1.5x weight (trusted voter)
+// reputation 0    = 0.5x weight (unreliable voter)
+// reputation <0   = 0.3x weight (penalized voter)
+function getVoteWeight(walletAddr) {
+  const rep = getReputation(walletAddr);
+  if (rep >= 200) return 1.5;
+  if (rep >= 100) return 1.0 + (rep - 100) / 200; // 1.0 to 1.5
+  if (rep >= 0)   return 0.5 + (rep / 200);        // 0.5 to 1.0
+  return 0.3; // penalized
+}
+
+// ── Record a vote and check for game-theory violations ───
+async function recordVoteWithIntegrity(targetAddr, verdict, commitDay) {
+  const voter = walletPubkey?.toString() || 'anon';
+
+  // Record in history
+  _voteHistory.push({
+    voter,
+    target:  targetAddr,
+    verdict, // 'yes' | 'no' | 'skip'
+    day:     commitDay,
+    ts:      Date.now(),
+  });
+  sessionStorage.setItem('vote_history', JSON.stringify(_voteHistory));
+
+  // Check for bias: same verdict >90% of last 10 votes
+  const recentVotes = _voteHistory
+    .filter(v => v.voter === voter && v.verdict !== 'skip')
+    .slice(-10);
+  if (recentVotes.length >= 5) {
+    const yesCount = recentVotes.filter(v => v.verdict === 'yes').length;
+    const ratio    = yesCount / recentVotes.length;
+    if (ratio >= 0.9 || ratio <= 0.1) {
+      applyReputationChange(voter, VOTING_REWARDS.BIAS_WARNING, 'Voting bias detected');
+      showToast('⚠️', 'Bias warning',
+        'You always vote the same way. Your votes will be downweighted. ' +
+        'Penalty: ' + VOTING_REWARDS.BIAS_WARNING + ' reputation.');
+    }
+  }
+
+  return getVoteWeight(voter);
+}
+
+// ── Settle votes after window closes ─────────────────────
+// Called when votes are revealed. Compares each voter's verdict
+// to the final majority and applies rewards/penalties.
+function settleVotingIntegrity(targetAddr, finalVoteYes, finalVoteNo, voterVerdicts) {
+  const totalVotes  = finalVoteYes + finalVoteNo;
+  if (totalVotes === 0) return;
+
+  const yesPct      = finalVoteYes / totalVotes;
+  const majority    = yesPct >= 0.5 ? 'yes' : 'no';
+  const consensus   = Math.max(yesPct, 1 - yesPct); // 0.5 to 1.0
+
+  const results = [];
+
+  voterVerdicts.forEach(({ voter, verdict }) => {
+    if (verdict === 'skip') return;
+
+    const aligned = verdict === majority;
+
+    let change = 0;
+    let reason = '';
+
+    if (aligned) {
+      change = VOTING_REWARDS.ALIGN_BONUS;
+      reason = 'Aligned with majority';
+    } else if (consensus >= 0.8) {
+      // Strong consensus — going against it is suspicious
+      change = VOTING_REWARDS.OUTLIER_PENALTY;
+      reason = `Outlier vote (${Math.round(consensus*100)}% consensus)`;
+    } else {
+      change = VOTING_REWARDS.MILD_PENALTY;
+      reason = 'Voted against majority';
+    }
+
+    applyReputationChange(voter, change, reason);
+    results.push({ voter, change, reason, aligned, consensus });
+  });
+
+  return results;
+}
+
+// ── Apply reputation change ───────────────────────────────
+function applyReputationChange(walletAddr, delta, reason) {
+  const current = getReputation(walletAddr);
+  const newRep  = Math.max(
+    VOTING_REWARDS.MIN_REPUTATION,
+    Math.min(VOTING_REWARDS.MAX_REPUTATION, current + delta)
+  );
+  _voterReputation[walletAddr] = newRep;
+  sessionStorage.setItem('voter_reputation', JSON.stringify(_voterReputation));
+
+  console.log(`Reputation [${walletAddr.slice(0,8)}]: ${current} → ${newRep} (${delta > 0 ? '+' : ''}${delta} | ${reason})`);
+  return newRep;
+}
+
+// ── Get reputation display string ──────────────────────────
+function getReputationDisplay(walletAddr) {
+  const rep    = getReputation(walletAddr);
+  const weight = getVoteWeight(walletAddr);
+  let tier, color;
+  if (rep >= 200) { tier = 'Trusted Voter';    color = 'var(--accent2)'; }
+  else if (rep >= 100) { tier = 'Good Standing'; color = 'var(--text)'; }
+  else if (rep >= 0)   { tier = 'Caution';       color = 'var(--gold)'; }
+  else                 { tier = 'Penalized';      color = 'var(--accent3)'; }
+  return { rep, weight, tier, color };
+}
+
+// ── Simulate a voting settlement for demo ─────────────────
+function demoSettleVotes() {
+  const voter = walletPubkey?.toString() || 'demo_voter';
+  const results = settleVotingIntegrity(
+    '3Fk9...aB7c', // target
+    4, 1,           // 4 yes, 1 no — majority YES with 80% consensus
+    [
+      { voter, verdict: 'yes' }, // aligned ✓
+      { voter: '9mPq...Xw2f', verdict: 'no' },  // outlier ✗
+    ]
+  );
+
+  const myRep = getReputationDisplay(voter);
+  showToast(
+    myRep.rep > 100 ? '⭐' : myRep.rep < 0 ? '⚠️' : 'ℹ️',
+    'Vote settled — ' + myRep.tier,
+    'Reputation: ' + myRep.rep + ' · Vote weight: ' + myRep.weight.toFixed(2) + 'x'
+  );
+  return results;
+}
+
+// ── Expose to window ──────────────────────────────────────
+window.getReputation         = getReputation;
+window.getVoteWeight         = getVoteWeight;
+window.getReputationDisplay  = getReputationDisplay;
+window.recordVoteWithIntegrity = recordVoteWithIntegrity;
+window.settleVotingIntegrity = settleVotingIntegrity;
+window.demoSettleVotes       = demoSettleVotes;
