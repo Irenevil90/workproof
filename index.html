@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkProof — Verified Contribution Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #18181f;
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.14);
+  --text: #f0f0f5;
+  --muted: #888899;
+  --accent: #7c5cfc;
+  --accent2: #00e5b0;
+  --accent3: #ff6b4a;
+  --gold: #ffc84a;
+  --silver: #c0c8d8;
+  --bronze: #e8956d;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-head);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* GRID BACKGROUND */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(124,92,252,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,92,252,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* GLOW ORBS */
+.orb {
+  position:fixed;
+  border-radius:50%;
+  filter:blur(80px);
+  pointer-events:none;
+  z-index:0;
+}
+.orb1 { width:400px;height:400px; background:rgba(124,92,252,0.15); top:-100px; right:-100px; }
+.orb2 { width:300px;height:300px; background:rgba(0,229,176,0.08); bottom:100px; left:-100px; }
+
+/* SCREENS */
+.screen { display:none; position:relative; z-index:1; }
+.screen.active { display:block; }
+
+/* ═══════════════════════════════════════
+   SETUP WIZARD
+═══════════════════════════════════════ */
+.wizard {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-dot { width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+.wizard-step { display:none; animation: fadeUp 0.4s ease; }
+.wizard-step.active { display:block; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+.step-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--accent2);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.wizard h1 {
+  font-size: clamp(32px,5vw,52px);
+  font-weight: 800;
+  line-height: 1.05;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.wizard h1 span { color: var(--accent); }
+.wizard h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
+.wizard p.sub { color: var(--muted); font-size: 15px; line-height: 1.6; margin-bottom: 40px; }
+
+/* PROGRESS BAR */
+.progress-track {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 40px;
+}
+.progress-seg {
+  height: 3px;
+  flex: 1;
+  background: var(--border2);
+  border-radius: 2px;
+  transition: background 0.4s;
+}
+.progress-seg.done { background: var(--accent); }
+.progress-seg.active { background: var(--accent2); }
+
+/* FIELD GROUPS */
+.field-group { margin-bottom: 28px; }
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.field-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-family: var(--font-head);
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.field-input:focus { border-color: var(--accent); }
+
+/* SLIDER */
+.slider-wrap { position:relative; padding-bottom: 8px; }
+.slider-val {
+  position:absolute;
+  right:0;
+  top:-28px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--accent2);
+  font-weight: 700;
+}
+input[type=range] {
+  width:100%;
+  -webkit-appearance:none;
+  appearance:none;
+  height:4px;
+  background: var(--border2);
+  border-radius:2px;
+  outline:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:20px;height:20px;
+  border-radius:50%;
+  background: var(--accent);
+  cursor:pointer;
+  box-shadow: 0 0 12px rgba(124,92,252,0.6);
+}
+
+/* OPTION CARDS */
+.option-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:28px; }
+.opt-card {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.opt-card:hover { border-color: var(--accent); }
+.opt-card.selected { border-color: var(--accent); background: rgba(124,92,252,0.12); }
+.opt-card.selected::before {
+  content:'✓';
+  position:absolute;
+  top:10px;right:12px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  color:var(--accent);
+}
+.opt-card .opt-icon { font-size:24px; margin-bottom:10px; }
+.opt-card .opt-title { font-size:14px; font-weight:700; margin-bottom:4px; }
+.opt-card .opt-desc { font-size:12px; color:var(--muted); line-height:1.4; }
+
+/* METRIC TOGGLES */
+.metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.metric-toggle {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:14px 16px;
+  cursor:pointer;
+  transition:all 0.2s;
+}
+.metric-toggle.on { border-color:var(--accent2); background:rgba(0,229,176,0.06); }
+.metric-toggle .mt-icon { font-size:18px; }
+.metric-toggle .mt-text { flex:1; }
+.metric-toggle .mt-title { font-size:13px; font-weight:600; }
+.metric-toggle .mt-sub { font-size:11px; color:var(--muted); }
+.toggle-pill {
+  width:36px;height:20px;
+  background:var(--border2);
+  border-radius:10px;
+  position:relative;
+  transition:background 0.2s;
+  flex-shrink:0;
+}
+.metric-toggle.on .toggle-pill { background:var(--accent2); }
+.toggle-pill::after {
+  content:'';
+  position:absolute;
+  width:14px;height:14px;
+  background:#fff;
+  border-radius:50%;
+  top:3px;left:3px;
+  transition:transform 0.2s;
+}
+.metric-toggle.on .toggle-pill::after { transform:translateX(16px); }
+
+/* REWARD PREVIEW */
+.reward-preview {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 28px;
+}
+.reward-row { display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border); }
+.reward-row:last-child { border-bottom:none; }
+.reward-pos { display:flex;align-items:center;gap:10px; }
+.medal { font-size:22px; }
+.reward-label { font-size:14px; color:var(--muted); }
+.reward-amount { font-family:var(--font-mono); font-size:16px; font-weight:700; }
+.r1 { color:var(--gold); }
+.r2 { color:var(--silver); }
+.r3 { color:var(--bronze); }
+
+/* SUMMARY CARD */
+.summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:28px; }
+.summary-card {
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:18px;
+}
+.summary-card .sc-label { font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:6px; }
+.summary-card .sc-val { font-size:20px;font-weight:700; }
+
+/* BTN */
+.btn {
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:16px 32px;
+  border-radius:10px;
+  font-family:var(--font-head);
+  font-size:15px;
+  font-weight:700;
+  cursor:pointer;
+  border:none;
+  transition:all 0.2s;
+  letter-spacing:0.02em;
+}
+.btn-primary {
+  background:var(--accent);
+  color:#fff;
+  box-shadow:0 0 24px rgba(124,92,252,0.4);
+}
+.btn-primary:hover { background:#8d6dfd;box-shadow:0 0 32px rgba(124,92,252,0.6); transform:translateY(-1px); }
+.btn-secondary {
+  background:transparent;
+  color:var(--muted);
+  border:1px solid var(--border2);
+}
+.btn-secondary:hover { border-color:var(--border2);color:var(--text); }
+.btn-row { display:flex;gap:12px;margin-top:8px; }
+
+/* ═══════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════ */
+.dashboard { display:none; }
+.dashboard.active { display:flex; min-height:100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 28px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.sidebar-logo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  display:flex;align-items:center;gap:8px;
+}
+.nav-section { margin-bottom:24px; }
+.nav-section-label { font-family:var(--font-mono);font-size:9px;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;padding:0 8px; }
+.nav-item {
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;
+  border-radius:8px;
+  font-size:13px;
+  font-weight:600;
+  color:var(--muted);
+  cursor:pointer;
+  transition:all 0.15s;
+  margin-bottom:2px;
+}
+.nav-item:hover { background:var(--bg3);color:var(--text); }
+.nav-item.active { background:rgba(124,92,252,0.15);color:var(--accent); }
+.nav-item .nav-icon { font-size:16px;width:20px;text-align:center; }
+.nav-badge {
+  margin-left:auto;
+  background:var(--accent3);
+  color:#fff;
+  font-family:var(--font-mono);
+  font-size:9px;
+  padding:2px 6px;
+  border-radius:10px;
+  font-weight:700;
+}
+
+.sidebar-challenge {
+  margin-top: auto;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 14px;
+}
+.sc-title { font-size:11px;color:var(--muted);margin-bottom:6px; }
+.sc-name { font-size:13px;font-weight:700;margin-bottom:10px; }
+.sc-timer { font-family:var(--font-mono);font-size:18px;color:var(--accent2);font-weight:700;margin-bottom:4px; }
+.sc-timer-label { font-size:10px;color:var(--muted); }
+.progress-bar { height:4px;background:var(--border2);border-radius:2px;margin-top:10px;overflow:hidden; }
+.progress-fill { height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width 0.5s; }
+
+/* MAIN CONTENT */
+.main { flex:1; padding:32px; overflow-y:auto; }
+
+.page { display:none; }
+.page.active { display:block; animation:fadeUp 0.3s ease; }
+
+/* TOP BAR */
+.topbar { display:flex;align-items:center;justify-content:space-between;margin-bottom:32px; }
+.topbar-title { font-size:22px;font-weight:800;letter-spacing:-0.02em; }
+.topbar-right { display:flex;align-items:center;gap:12px; }
+.tag {
+  padding:6px 14px;
+  border-radius:20px;
+  font-family:var(--font-mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+}
+.tag-live { background:rgba(0,229,176,0.12);color:var(--accent2);border:1px solid rgba(0,229,176,0.25); }
+.tag-day { background:rgba(124,92,252,0.12);color:var(--accent);border:1px solid rgba(124,92,252,0.25); }
+
+/* STAT ROW */
+.stat-row { display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px; }
+.stat-card {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:20px;
+  position:relative;
+  overflow:hidden;
+  transition:border-color 0.2s;
+}
+.stat-card:hover { border-color:var(--border2); }
+.stat-card::after {
+  content:'';
+  position:absolute;
+  bottom:0;left:0;right:0;height:2px;
+  background:var(--accent-bar,var(--accent));
+  opacity:0.6;
+}
+.stat-icon { font-size:20px;margin-bottom:12px; }
+.stat-val { font-family:var(--font-mono);font-size:26px;font-weight:700;margin-bottom:4px; }
+.stat-label { font-size:12px;color:var(--muted); }
+.stat-delta { font-family:var(--font-mono);font-size:10px;color:var(--accent2);margin-top:6px; }
+
+/* LEADERBOARD */
+.leaderboard-wrap {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:hidden;
+  margin-bottom:28px;
+}
+.lb-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:20px 24px;
+  border-bottom:1px solid var(--border);
+}
+.lb-title { font-size:14px;font-weight:700; }
+.lb-subtitle { font-size:11px;color:var(--muted);font-family:var(--font-mono); }
+
+.lb-row {
+  display:grid;
+  grid-template-columns:40px 1fr 80px 80px 80px 100px;
+  align-items:center;
+  padding:14px 24px;
+  border-bottom:1px solid var(--border);
+  transition:background 0.15s;
+  cursor:pointer;
+}
+.lb-row:hover { background:rgba(255,255,255,0.02); }
+.lb-row:last-child { border-bottom:none; }
+.lb-row.top1 { background:rgba(255,200,74,0.04); }
+.lb-row.top2 { background:rgba(192,200,216,0.03); }
+.lb-row.top3 { background:rgba(232,149,109,0.03); }
+
+.lb-rank { font-family:var(--font-mono);font-size:13px;font-weight:700; }
+.rank-1 { color:var(--gold); }
+.rank-2 { color:var(--silver); }
+.rank-3 { color:var(--bronze); }
+
+.lb-wallet {
+  display:flex;align-items:center;gap:10px;
+}
+.wallet-avatar {
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;
+  font-weight:700;
+  font-family:var(--font-mono);
+  font-size:11px;
+}
+.wallet-addr { font-family:var(--font-mono);font-size:12px;color:var(--muted); }
+.wallet-you { font-size:10px;background:rgba(124,92,252,0.2);color:var(--accent);padding:2px 7px;border-radius:4px;margin-left:6px; }
+
+.lb-score { font-family:var(--font-mono);font-size:14px;font-weight:700;text-align:right; }
+.lb-consensus { text-align:right; }
+.consensus-bar { height:4px;background:var(--border2);border-radius:2px;margin-top:4px;overflow:hidden; }
+.consensus-fill { height:100%;border-radius:2px; }
+.lb-streak { font-family:var(--font-mono);font-size:12px;text-align:center; }
+.lb-reward { text-align:right; }
+.lb-col-label { font-family:var(--font-mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em; }
+
+.lb-col-headers {
+  display:grid;
+  grid-template-columns:40px 1fr 80px 80px 80px 100px;
+  padding:10px 24px;
+  border-bottom:1px solid var(--border);
+}
+
+/* VOTE INBOX */
+.vote-card {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:24px;
+  margin-bottom:16px;
+}
+.vote-card-header { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px; }
+.vote-wallet { font-family:var(--font-mono);font-size:13px; }
+.vote-day { font-size:11px;color:var(--muted); }
+.activity-chips { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px; }
+.chip {
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  padding:6px 12px;
+  font-size:12px;
+  display:flex;align-items:center;gap:6px;
+}
+.chip-val { font-family:var(--font-mono);color:var(--accent2); }
+.vote-actions { display:flex;gap:12px; }
+.vote-btn {
+  flex:1;padding:14px;border-radius:10px;border:1px solid var(--border2);
+  font-family:var(--font-head);font-size:14px;font-weight:700;
+  cursor:pointer;transition:all 0.2s;background:var(--bg3);color:var(--text);
+}
+.vote-btn.yes:hover { background:rgba(0,229,176,0.15);border-color:var(--accent2);color:var(--accent2); }
+.vote-btn.no:hover { background:rgba(255,107,74,0.15);border-color:var(--accent3);color:var(--accent3); }
+.vote-btn.skip:hover { background:var(--bg2); }
+.voted-badge { text-align:center;padding:16px;color:var(--muted);font-size:14px; }
+
+/* BADGES */
+.badges-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px; }
+.badge-card {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:20px;
+  text-align:center;
+  transition:all 0.2s;
+  cursor:pointer;
+}
+.badge-card:hover { border-color:var(--border2);transform:translateY(-2px); }
+.badge-card.earned { border-color:rgba(124,92,252,0.4); }
+.badge-card.locked { opacity:0.4; }
+.badge-icon { font-size:36px;margin-bottom:10px; }
+.badge-name { font-size:13px;font-weight:700;margin-bottom:4px; }
+.badge-desc { font-size:11px;color:var(--muted);line-height:1.4; }
+.badge-earned-label { font-family:var(--font-mono);font-size:9px;color:var(--accent2);margin-top:8px; }
+
+/* PROFILE */
+.profile-hero {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:28px;
+  margin-bottom:20px;
+  display:flex;
+  align-items:center;
+  gap:24px;
+}
+.profile-avatar {
+  width:64px;height:64px;border-radius:14px;
+  background:rgba(124,92,252,0.2);
+  border:2px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+}
+.profile-wallet { font-family:var(--font-mono);font-size:14px;color:var(--muted);margin-bottom:6px; }
+.profile-name { font-size:22px;font-weight:800;margin-bottom:4px; }
+.profile-rank { font-family:var(--font-mono);font-size:12px; }
+
+.score-history {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:24px;
+  margin-bottom:20px;
+}
+.mini-chart { display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:16px; }
+.bar { flex:1;border-radius:3px 3px 0 0;background:var(--accent);opacity:0.4;min-width:4px;transition:opacity 0.2s; }
+.bar.today { opacity:1;background:var(--accent2); }
+.bar:hover { opacity:0.8; }
+
+/* CHAIN STATUS */
+.chain-card {
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:24px;
+  margin-bottom:16px;
+}
+.chain-row { display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border); }
+.chain-row:last-child { border-bottom:none; }
+.chain-label { font-size:13px;color:var(--muted); }
+.chain-val { font-family:var(--font-mono);font-size:13px; }
+.status-dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px; }
+.status-live { background:var(--accent2);box-shadow:0 0 8px var(--accent2); }
+.status-pending { background:var(--gold); }
+
+/* FLASH DAY BANNER */
+.flash-banner {
+  background: linear-gradient(135deg,rgba(255,200,74,0.12),rgba(255,107,74,0.08));
+  border: 1px solid rgba(255,200,74,0.3);
+  border-radius:14px;
+  padding:18px 24px;
+  margin-bottom:24px;
+  display:flex;align-items:center;gap:16px;
+}
+.flash-icon { font-size:28px;animation:wiggle 0.6s ease infinite alternate; }
+@keyframes wiggle { from{transform:rotate(-5deg)} to{transform:rotate(5deg)} }
+.flash-text { flex:1; }
+.flash-title { font-size:14px;font-weight:700;color:var(--gold);margin-bottom:2px; }
+.flash-sub { font-size:12px;color:var(--muted); }
+.flash-multiplier { font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--gold); }
+
+/* ESCROW CARD */
+.escrow-card {
+  background: linear-gradient(135deg,rgba(124,92,252,0.1),rgba(0,229,176,0.05));
+  border:1px solid rgba(124,92,252,0.3);
+  border-radius:16px;
+  padding:24px;
+  margin-bottom:24px;
+  display:flex;align-items:center;gap:24px;
+}
+.escrow-amount { font-family:var(--font-mono);font-size:36px;font-weight:700;color:var(--accent2); }
+.escrow-label { font-size:12px;color:var(--muted); }
+.escrow-address { font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px; }
+
+/* NOTIFICATION TOAST */
+.toast {
+  position:fixed;bottom:24px;right:24px;z-index:1000;
+  background:var(--bg3);
+  border:1px solid var(--accent);
+  border-radius:12px;
+  padding:16px 20px;
+  max-width:300px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.4);
+  animation:slideIn 0.3s ease;
+  display:none;
+}
+.toast.show { display:flex;gap:12px;align-items:flex-start; }
+@keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+.toast-icon { font-size:18px; }
+.toast-title { font-size:13px;font-weight:700;margin-bottom:2px; }
+.toast-body { font-size:12px;color:var(--muted); }
+
+/* CONFIG SUMMARY TAG */
+.cfg { font-family:var(--font-mono);color:var(--accent2); }
+
+/* RESPONSIVE */
+@media(max-width:640px){
+  .stat-row{grid-template-columns:1fr 1fr;}
+  .lb-row{grid-template-columns:30px 1fr 70px 80px;}
+  .sidebar{display:none;}
+  .lb-col-headers{grid-template-columns:30px 1fr 70px 80px;}
+}
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<!-- ═══════════════════ SETUP WIZARD ═══════════════════ -->
+<div id="screen-setup" class="screen active">
+<div class="wizard">
+  <div class="logo"><div class="logo-dot"></div>WorkProof Protocol</div>
+
+  <!-- PROGRESS -->
+  <div class="progress-track">
+    <div class="progress-seg done" id="ps1"></div>
+    <div class="progress-seg" id="ps2"></div>
+    <div class="progress-seg" id="ps3"></div>
+    <div class="progress-seg" id="ps4"></div>
+    <div class="progress-seg" id="ps5"></div>
+  </div>
+
+  <!-- STEP 1: Welcome -->
+  <div class="wizard-step active" id="step1">
+    <div class="step-label">Step 1 of 5 — Challenge setup</div>
+    <h1>Configure your<br><span>contribution</span><br>challenge</h1>
+    <p class="sub">Set up a verified, tamper-proof recognition program for your team. Peer-validated. Blockchain-settled. Privacy-first.</p>
+
+    <div class="field-group">
+      <label class="field-label">Challenge name</label>
+      <input class="field-input" id="cfg-name" type="text" placeholder="e.g. Q2 Innovation Sprint" value="Q2 Innovation Sprint">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Company / team name</label>
+      <input class="field-input" id="cfg-company" type="text" placeholder="e.g. Acme Corp — Engineering" value="TD SYNNEX — AI/ML Team">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="nextStep(2)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Team & Duration -->
+  <div class="wizard-step" id="step2">
+    <div class="step-label">Step 2 of 5 — Team & duration</div>
+    <h2>Who's competing?</h2>
+    <p class="sub">Set the size of the team and how long the challenge runs.</p>
+
+    <div class="field-group">
+      <label class="field-label">Number of employees <span class="slider-val" id="sv-employees">10</span></label>
+      <div class="slider-wrap">
+        <input type="range" id="cfg-employees" min="3" max="50" value="10" oninput="document.getElementById('sv-employees').textContent=this.value;updateReward()">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Challenge duration <span class="slider-val" id="sv-duration">30 days</span></label>
+      <div class="slider-wrap">
+        <input type="range" id="cfg-duration" min="7" max="90" value="30"
+          oninput="let v=+this.value; document.getElementById('sv-duration').textContent=v<30?v+' days':v==30?'1 month':Math.round(v/7)+' weeks'">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Top N rewarded</label>
+      <div class="option-cards" style="grid-template-columns:repeat(4,1fr)">
+        <div class="opt-card selected" onclick="selectOpt(this,'reward-n','1')" data-group="reward-n" data-val="1"><div class="opt-title">Top 1</div><div class="opt-desc">Winner takes all</div></div>
+        <div class="opt-card" onclick="selectOpt(this,'reward-n','3')" data-group="reward-n" data-val="3"><div class="opt-title">Top 3</div><div class="opt-desc">Podium rewards</div></div>
+        <div class="opt-card" onclick="selectOpt(this,'reward-n','5')" data-group="reward-n" data-val="5"><div class="opt-title">Top 5</div><div class="opt-desc">Wider recognition</div></div>
+        <div class="opt-card" onclick="selectOpt(this,'reward-n','10')" data-group="reward-n" data-val="10"><div class="opt-title">Top 10%</div><div class="opt-desc">Scaled tier</div></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="nextStep(1)">← Back</button>
+      <button class="btn btn-primary" onclick="nextStep(3)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Metrics -->
+  <div class="wizard-step" id="step3">
+    <div class="step-label">Step 3 of 5 — Activity metrics</div>
+    <h2>What gets measured?</h2>
+    <p class="sub">Choose which signals feed the daily score. All data stays encrypted on-device — you only see aggregated scores.</p>
+
+    <div class="metric-grid" id="metric-grid">
+      <div class="metric-toggle on" onclick="toggleMetric(this)">
+        <div class="mt-icon">💬</div>
+        <div class="mt-text"><div class="mt-title">Team messages</div><div class="mt-sub">Slack / Teams activity</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle on" onclick="toggleMetric(this)">
+        <div class="mt-icon">📅</div>
+        <div class="mt-text"><div class="mt-title">Meetings</div><div class="mt-sub">Calendar attendance</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle on" onclick="toggleMetric(this)">
+        <div class="mt-icon">📧</div>
+        <div class="mt-text"><div class="mt-title">Emails sent</div><div class="mt-sub">Response time included</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle on" onclick="toggleMetric(this)">
+        <div class="mt-icon">📄</div>
+        <div class="mt-text"><div class="mt-title">Docs & files</div><div class="mt-sub">Edits, shares, uploads</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle" onclick="toggleMetric(this)">
+        <div class="mt-icon">🔀</div>
+        <div class="mt-text"><div class="mt-title">Code commits</div><div class="mt-sub">Git / GitHub / GitLab</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle" onclick="toggleMetric(this)">
+        <div class="mt-icon">🎫</div>
+        <div class="mt-text"><div class="mt-title">Tickets closed</div><div class="mt-sub">Jira / Linear</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle on" onclick="toggleMetric(this)">
+        <div class="mt-icon">👥</div>
+        <div class="mt-text"><div class="mt-title">Peer consensus</div><div class="mt-sub">Anonymous daily vote</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+      <div class="metric-toggle" onclick="toggleMetric(this)">
+        <div class="mt-icon">📊</div>
+        <div class="mt-text"><div class="mt-title">Presentations</div><div class="mt-sub">Slides created/shared</div></div>
+        <div class="toggle-pill"></div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:28px">
+      <button class="btn btn-secondary" onclick="nextStep(2)">← Back</button>
+      <button class="btn btn-primary" onclick="nextStep(4)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Reward -->
+  <div class="wizard-step" id="step4">
+    <div class="step-label">Step 4 of 5 — Reward pool</div>
+    <h2>Set the prize pool</h2>
+    <p class="sub">Funds are locked in a Solana smart contract escrow. Released automatically to winners' wallets — no manual processing.</p>
+
+    <div class="field-group">
+      <label class="field-label">Total reward (USDC) <span class="slider-val" id="sv-reward">$1,000</span></label>
+      <div class="slider-wrap">
+        <input type="range" id="cfg-reward" min="100" max="10000" step="100" value="1000"
+          oninput="document.getElementById('sv-reward').textContent='$'+Number(this.value).toLocaleString();updateReward()">
+      </div>
+    </div>
+
+    <div class="reward-preview" id="reward-preview">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Voting threshold</label>
+      <div class="option-cards" style="grid-template-columns:repeat(3,1fr)">
+        <div class="opt-card" onclick="selectOpt(this,'vote-t','50')" data-group="vote-t"><div class="opt-title">Simple</div><div class="opt-desc">3/5 peers agree</div></div>
+        <div class="opt-card selected" onclick="selectOpt(this,'vote-t','60')" data-group="vote-t"><div class="opt-title">Strong ✓</div><div class="opt-desc">4/5 peers agree</div></div>
+        <div class="opt-card" onclick="selectOpt(this,'vote-t','80')" data-group="vote-t"><div class="opt-title">Strict</div><div class="opt-desc">5/5 unanimous</div></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="nextStep(3)">← Back</button>
+      <button class="btn btn-primary" onclick="nextStep(5)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 5: Review & Launch -->
+  <div class="wizard-step" id="step5">
+    <div class="step-label">Step 5 of 5 — Review & deploy</div>
+    <h2>Ready to deploy</h2>
+    <p class="sub">Review your challenge configuration. Once launched, the reward pool locks on-chain and the leaderboard goes live.</p>
+
+    <div class="summary-grid" id="summary-grid">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="escrow-card">
+      <div>
+        <div class="escrow-amount" id="escrow-amount">$1,000</div>
+        <div class="escrow-label">USDC locked in escrow at launch</div>
+        <div class="escrow-address">Solana devnet · auto-release on completion</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Contract program</div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">WrkPr...1D2p4</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">🔒 company cannot withdraw</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="nextStep(4)">← Back</button>
+      <button class="btn btn-primary" onclick="launch()" id="launch-btn">🚀 Deploy challenge</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="screen-dashboard" class="screen">
+<div class="dashboard active">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="logo-dot"></div>WorkProof</div>
+    <button id="wallet-btn" class="btn btn-secondary" style="font-size:11px;padding:8px 14px;margin-bottom:20px;width:100%;justify-content:center;" onclick="handleWalletBtn()">👻 Connect Phantom</button>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:20px;padding:0 4px">
+      <span id="chain-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;"></span>
+      <span id="chain-status-label" style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">Disconnected</span>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Challenge</div>
+      <div class="nav-item active" onclick="showPage('leaderboard',this)"><span class="nav-icon">🏆</span>Leaderboard</div>
+      <div class="nav-item" onclick="showPage('vote',this)"><span class="nav-icon">🗳️</span>Vote inbox <span class="nav-badge">3</span></div>
+      <div class="nav-item" onclick="showPage('badges',this)"><span class="nav-icon">🎖️</span>Badges</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">My account</div>
+      <div class="nav-item" onclick="showPage('profile',this)"><span class="nav-icon">👤</span>My profile</div>
+      <div class="nav-item" onclick="showPage('chain',this)"><span class="nav-icon">⛓️</span>Chain status</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Admin</div>
+      <div class="nav-item" onclick="showPage('admin',this)"><span class="nav-icon">⚙️</span>Settings</div>
+    </div>
+
+    <div class="sidebar-challenge">
+      <div class="sc-title">Active challenge</div>
+      <div class="sc-name" id="sb-name">Q2 Innovation Sprint</div>
+      <div class="sc-timer" id="sb-timer">23d 14h</div>
+      <div class="sc-timer-label">remaining</div>
+      <div class="progress-bar"><div class="progress-fill" id="sb-progress" style="width:23%"></div></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEADERBOARD PAGE -->
+    <div class="page active" id="page-leaderboard">
+      <div class="topbar">
+        <div class="topbar-title">Leaderboard</div>
+        <div class="topbar-right">
+          <div class="tag tag-live">● Live</div>
+          <div class="tag tag-day" id="day-tag">Day 7 of 30</div>
+        </div>
+      </div>
+
+      <div id="flash-banner-wrap"></div>
+
+      <div class="stat-row">
+        <div class="stat-card" style="--accent-bar:var(--accent)">
+          <div class="stat-icon">👥</div>
+          <div class="stat-val" id="stat-employees">10</div>
+          <div class="stat-label">Participants</div>
+        </div>
+        <div class="stat-card" style="--accent-bar:var(--accent2)">
+          <div class="stat-icon">🗳️</div>
+          <div class="stat-val">86<span style="font-size:14px">%</span></div>
+          <div class="stat-label">Avg consensus today</div>
+          <div class="stat-delta">↑ +4% vs yesterday</div>
+        </div>
+        <div class="stat-card" style="--accent-bar:var(--gold)">
+          <div class="stat-icon">🏅</div>
+          <div class="stat-val" id="stat-reward-disp">$1,000</div>
+          <div class="stat-label">Prize pool locked</div>
+        </div>
+        <div class="stat-card" style="--accent-bar:var(--accent3)">
+          <div class="stat-icon">⛓️</div>
+          <div class="stat-val">7</div>
+          <div class="stat-label">Days committed</div>
+          <div class="stat-delta">0 disputes</div>
+        </div>
+      </div>
+
+      <div class="leaderboard-wrap">
+        <div class="lb-header">
+          <div>
+            <div class="lb-title">Rankings — wallet addresses only</div>
+            <div class="lb-subtitle">Company cannot link wallets to identities</div>
+          </div>
+        </div>
+        <div class="lb-col-headers">
+          <div class="lb-col-label">#</div>
+          <div class="lb-col-label">Wallet</div>
+          <div class="lb-col-label" style="text-align:right">Score</div>
+          <div class="lb-col-label" style="text-align:right">Consensus</div>
+          <div class="lb-col-label" style="text-align:center">Streak</div>
+          <div class="lb-col-label" style="text-align:right">Est. reward</div>
+        </div>
+        <div id="lb-body"></div>
+      </div>
+    </div>
+
+    <!-- VOTE PAGE -->
+    <div class="page" id="page-vote">
+      <div class="topbar">
+        <div class="topbar-title">Vote inbox</div>
+        <div class="topbar-right"><div class="tag tag-live">3 pending</div></div>
+      </div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:24px">Anonymous peer validation. Your vote is wallet-signed and commit-revealed on-chain. No one can see who voted what.</p>
+      <div id="vote-cards"></div>
+    </div>
+
+    <!-- BADGES PAGE -->
+    <div class="page" id="page-badges">
+      <div class="topbar"><div class="topbar-title">Badges & achievements</div></div>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:24px">Earned badges are minted as soulbound tokens on Solana — portable proof for your CV and LinkedIn.</p>
+      <div class="badges-grid" id="badges-grid"></div>
+    </div>
+
+    <!-- PROFILE PAGE -->
+    <div class="page" id="page-profile">
+      <div class="topbar"><div class="topbar-title">My profile</div></div>
+      <div class="profile-hero">
+        <div class="profile-avatar">🧑‍💻</div>
+        <div>
+          <div class="profile-wallet">7xK3...mNp2 <span style="font-size:11px;color:var(--muted)">(your anonymous wallet)</span></div>
+          <div class="profile-name">You</div>
+          <div class="profile-rank" id="profile-rank-txt">Rank <span style="color:var(--accent2)">#3</span> · 7-day streak 🔥</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Total score</div>
+          <div style="font-family:var(--font-mono);font-size:32px;font-weight:700;color:var(--accent2)">847</div>
+        </div>
+      </div>
+      <div class="score-history">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">Daily score history</div>
+        <div style="font-size:12px;color:var(--muted)">Last 14 days — higher = better day</div>
+        <div class="mini-chart" id="mini-chart"></div>
+      </div>
+      <div class="chain-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">On-chain proof</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Your contribution record — shareable, verifiable, permanent</div>
+        <div class="chain-row"><div class="chain-label">Wallet</div><div class="chain-val">7xK3...mNp2</div></div>
+        <div class="chain-row"><div class="chain-label">Days committed</div><div class="chain-val">7 / 30</div></div>
+        <div class="chain-row"><div class="chain-label">Peer validations received</div><div class="chain-val">6 / 7 days</div></div>
+        <div class="chain-row"><div class="chain-label">Soulbound tokens</div><div class="chain-val">2 minted 🏅</div></div>
+        <div class="chain-row"><div class="chain-label">Share proof</div><div class="chain-val" style="color:var(--accent);cursor:pointer">workproof.xyz/proof/7xK3</div></div>
+      </div>
+    </div>
+
+    <!-- CHAIN PAGE -->
+    <div class="page" id="page-chain">
+      <div class="topbar"><div class="topbar-title">Chain status</div></div>
+      <div class="chain-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Smart contract status</div>
+        <div class="chain-row"><div class="chain-label">Network</div><div class="chain-val"><span class="status-dot status-live"></span>Solana Devnet</div></div>
+        <div class="chain-row"><div class="chain-label">Program ID</div><div class="chain-val">WrkPr...1D2p4</div></div>
+        <div class="chain-row"><div class="chain-label">Escrow vault</div><div class="chain-val"><span class="status-dot status-live"></span>Funded</div></div>
+        <div class="chain-row"><div class="chain-label">USDC locked</div><div class="chain-val" id="chain-usdc">$1,000</div></div>
+        <div class="chain-row"><div class="chain-label">Daily commits</div><div class="chain-val">7 days · 0 disputes</div></div>
+        <div class="chain-row"><div class="chain-label">Vote program</div><div class="chain-val"><span class="status-dot status-live"></span>Active</div></div>
+        <div class="chain-row"><div class="chain-label">Commit-reveal</div><div class="chain-val">Enabled · anonymous</div></div>
+        <div class="chain-row"><div class="chain-label">Auto-release</div><div class="chain-val"><span class="status-dot status-pending"></span>Day 30</div></div>
+      </div>
+      <div class="chain-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Recent transactions</div>
+        <div id="tx-log"></div>
+      </div>
+    </div>
+
+    <!-- ADMIN PAGE -->
+    <div class="page" id="page-admin">
+      <div class="topbar"><div class="topbar-title">Admin panel</div></div>
+      <div style="background:rgba(255,107,74,0.06);border:1px solid rgba(255,107,74,0.2);border-radius:12px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:var(--muted)">
+        ⚠️ Admin view shows only aggregated stats. Raw activity data is encrypted client-side and cannot be accessed by anyone except the employee who owns the wallet.
+      </div>
+      <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat-card">
+          <div class="stat-icon">📊</div>
+          <div class="stat-val" id="admin-stat-emp">10</div>
+          <div class="stat-label">Active participants</div>
+        </div>
+        <div class="stat-card" style="--accent-bar:var(--accent2)">
+          <div class="stat-icon">🗳️</div>
+          <div class="stat-val">94<span style="font-size:14px">%</span></div>
+          <div class="stat-label">Vote participation rate</div>
+        </div>
+        <div class="stat-card" style="--accent-bar:var(--gold)">
+          <div class="stat-icon">💰</div>
+          <div class="stat-val" id="admin-stat-reward">$1,000</div>
+          <div class="stat-label">Escrow locked</div>
+        </div>
+      </div>
+      <div class="chain-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px">Challenge configuration</div>
+        <div id="admin-cfg-display"></div>
+      </div>
+      <div class="chain-card" style="margin-top:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Reconfigure challenge</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">You can update the reward pool or extend the duration. Leaderboard and voting rules are locked once deployed.</p>
+        <button class="btn btn-secondary" onclick="resetWizard()" style="font-size:13px;padding:10px 20px">← Back to setup wizard</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toast-icon">🎉</div>
+  <div><div class="toast-title" id="toast-title">Title</div><div class="toast-body" id="toast-body">Body</div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const cfg = {
+  name: 'Q2 Innovation Sprint',
+  company: 'TD SYNNEX — AI/ML Team',
+  employees: 10,
+  duration: 30,
+  rewardN: 3,
+  reward: 1000,
+  voteThreshold: '4/5'
+};
+
+let currentStep = 1;
+const TOTAL_STEPS = 5;
+
+// ═══════════════════════════════════════════════
+// WIZARD NAVIGATION
+// ═══════════════════════════════════════════════
+function nextStep(n) {
+  // collect current values
+  cfg.name = document.getElementById('cfg-name').value || cfg.name;
+  cfg.company = document.getElementById('cfg-company').value || cfg.company;
+  cfg.employees = +document.getElementById('cfg-employees').value;
+  cfg.duration = +document.getElementById('cfg-duration').value;
+  cfg.reward = +document.getElementById('cfg-reward').value;
+
+  document.getElementById('step'+currentStep).classList.remove('active');
+  currentStep = n;
+  document.getElementById('step'+currentStep).classList.add('active');
+
+  // progress bar
+  for(let i=1;i<=TOTAL_STEPS;i++){
+    const seg = document.getElementById('ps'+i);
+    if(i<n) seg.className='progress-seg done';
+    else if(i===n) seg.className='progress-seg active';
+    else seg.className='progress-seg';
+  }
+
+  if(n===4) updateReward();
+  if(n===5) buildSummary();
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function selectOpt(el, group, val) {
+  document.querySelectorAll(`[data-group="${group}"]`).forEach(e=>e.classList.remove('selected'));
+  el.classList.add('selected');
+  if(group==='reward-n') { cfg.rewardN = +val; updateReward(); }
+  if(group==='vote-t') cfg.voteThreshold = val==='50'?'3/5':val==='60'?'4/5':'5/5';
+}
+
+function toggleMetric(el) { el.classList.toggle('on'); }
+
+function updateReward() {
+  const total = +document.getElementById('cfg-reward').value || cfg.reward;
+  const n = cfg.rewardN || 3;
+  const splits = { 1:[1], 3:[0.5,0.3,0.2], 5:[0.4,0.25,0.15,0.1,0.1], 10:null };
+  const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+  const classes = ['r1','r2','r3','',''];
+  let html = '';
+  const pcts = splits[n] || splits[3];
+  for(let i=0;i<n&&i<5;i++){
+    const amt = pcts ? Math.round(total*pcts[i]) : Math.round(total/n);
+    const cls = i<3?classes[i]:'';
+    html += `<div class="reward-row"><div class="reward-pos"><span class="medal">${medals[i]||'🏅'}</span><span class="reward-label">Place ${i+1}</span></div><span class="reward-amount ${cls}">$${amt.toLocaleString()} USDC</span></div>`;
+  }
+  const el = document.getElementById('reward-preview');
+  if(el) el.innerHTML = html;
+}
+
+function buildSummary() {
+  const g = document.getElementById('summary-grid');
+  const durStr = cfg.duration<30?cfg.duration+' days':cfg.duration==30?'1 month':Math.round(cfg.duration/7)+' weeks';
+  g.innerHTML = `
+    <div class="summary-card"><div class="sc-label">Challenge</div><div class="sc-val">${cfg.name}</div></div>
+    <div class="summary-card"><div class="sc-label">Team</div><div class="sc-val">${cfg.company}</div></div>
+    <div class="summary-card"><div class="sc-label">Participants</div><div class="sc-val">${cfg.employees} employees</div></div>
+    <div class="summary-card"><div class="sc-label">Duration</div><div class="sc-val">${durStr}</div></div>
+    <div class="summary-card"><div class="sc-label">Reward pool</div><div class="sc-val">$${cfg.reward.toLocaleString()} USDC</div></div>
+    <div class="summary-card"><div class="sc-label">Top rewarded</div><div class="sc-val">Top ${cfg.rewardN}</div></div>
+    <div class="summary-card"><div class="sc-label">Vote threshold</div><div class="sc-val">${cfg.voteThreshold} peers</div></div>
+    <div class="summary-card"><div class="sc-label">Privacy</div><div class="sc-val">Encrypted local</div></div>
+  `;
+  document.getElementById('escrow-amount').textContent = '$'+cfg.reward.toLocaleString();
+}
+
+function launch() {
+  const btn = document.getElementById('launch-btn');
+  btn.textContent = '⏳ Deploying...';
+  btn.disabled = true;
+  setTimeout(()=>{
+    initDashboard();
+    document.getElementById('screen-setup').classList.remove('active');
+    document.getElementById('screen-dashboard').classList.add('active');
+    showToast('🚀','Challenge deployed!','Smart contract live on Solana devnet. Leaderboard is now active.');
+  }, 1800);
+}
+
+function resetWizard() {
+  document.getElementById('screen-dashboard').classList.remove('active');
+  document.getElementById('screen-setup').classList.add('active');
+  nextStep(1);
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD DATA
+// ═══════════════════════════════════════════════
+const WALLETS = [
+  {addr:'3Fk9...aB7c',score:1240,consensus:94,streak:7,rank:1},
+  {addr:'9mPq...Xw2f',score:1180,consensus:91,streak:7,rank:2},
+  {addr:'7xK3...mNp2',score:847,consensus:88,streak:7,rank:3,isYou:true},
+  {addr:'Bc4L...qR8e',score:720,consensus:82,streak:5,rank:4},
+  {addr:'5Zt7...hK1d',score:698,consensus:79,streak:6,rank:5},
+  {addr:'Kp2M...yV5n',score:634,consensus:85,streak:4,rank:6},
+  {addr:'8rNs...oW3j',score:601,consensus:76,streak:3,rank:7},
+  {addr:'2Jw6...cD4p',score:544,consensus:72,streak:7,rank:8},
+  {addr:'Hf1B...tL9a',score:499,consensus:68,streak:2,rank:9},
+  {addr:'4eQv...sM0k',score:412,consensus:65,streak:1,rank:10},
+];
+
+const BG_COLORS = ['#7c5cfc','#00e5b0','#ff6b4a','#ffc84a','#e05ccf','#4a9eff','#ff5b8a','#5be0cc','#ffb347','#a0c55f'];
+
+function initDashboard() {
+  // apply cfg
+  document.getElementById('sb-name').textContent = cfg.name;
+  document.getElementById('stat-employees').textContent = cfg.employees;
+  document.getElementById('stat-reward-disp').textContent = '$'+cfg.reward.toLocaleString();
+  document.getElementById('chain-usdc').textContent = '$'+cfg.reward.toLocaleString();
+  document.getElementById('admin-stat-emp').textContent = cfg.employees;
+  document.getElementById('admin-stat-reward').textContent = '$'+cfg.reward.toLocaleString();
+
+  const durStr = cfg.duration<30?cfg.duration+' days':cfg.duration==30?'1 month':Math.round(cfg.duration/7)+' weeks';
+  document.getElementById('day-tag').textContent = 'Day 7 of '+cfg.duration;
+
+  buildLeaderboard();
+  buildVoteCards();
+  buildBadges();
+  buildMiniChart();
+  buildTxLog();
+  buildAdminCfg();
+  buildFlashBanner();
+}
+
+function buildLeaderboard() {
+  const splits = {1:[1],3:[0.5,0.3,0.2],5:[0.4,0.25,0.15,0.1,0.1],10:null};
+  const pcts = splits[cfg.rewardN]||splits[3];
+  const rowClasses = ['top1','top2','top3','','','','','','',''];
+  const rankColors = ['rank-1','rank-2','rank-3','',''];
+  const rankEmojis = ['🥇','🥈','🥉','','','','','','',''];
+
+  let html = '';
+  WALLETS.forEach((w,i)=>{
+    const rewardEst = i<cfg.rewardN && pcts ? Math.round(cfg.reward*pcts[i]) : (i<cfg.rewardN?Math.round(cfg.reward/cfg.rewardN):0);
+    const rewardStr = rewardEst>0 ? `<span style="color:var(--gold);font-family:var(--font-mono);font-size:12px">$${rewardEst}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>';
+    const consColor = w.consensus>=90?'var(--accent2)':w.consensus>=75?'var(--accent)':'var(--accent3)';
+    html += `
+    <div class="lb-row ${rowClasses[i]||''}">
+      <div class="lb-rank ${rankColors[i]||''}">${rankEmojis[i]||w.rank}</div>
+      <div class="lb-wallet">
+        <div class="wallet-avatar" style="background:${BG_COLORS[i]}22;color:${BG_COLORS[i]}">${w.addr.slice(0,2)}</div>
+        <div>
+          <div class="wallet-addr">${w.addr}${w.isYou?'<span class="wallet-you">you</span>':''}</div>
+        </div>
+      </div>
+      <div class="lb-score" style="color:${i<3?'var(--accent2)':'var(--text)'}">${w.score.toLocaleString()}</div>
+      <div class="lb-consensus">
+        <div style="font-family:var(--font-mono);font-size:12px;text-align:right;color:${consColor}">${w.consensus}%</div>
+        <div class="consensus-bar"><div class="consensus-fill" style="width:${w.consensus}%;background:${consColor}"></div></div>
+      </div>
+      <div class="lb-streak" style="color:${w.streak>=7?'var(--gold)':w.streak>=5?'var(--accent2)':'var(--muted)'}">
+        ${w.streak>=7?'🔥':''}${w.streak}d
+      </div>
+      <div class="lb-reward" style="text-align:right">${rewardStr}</div>
+    </div>`;
+  });
+  document.getElementById('lb-body').innerHTML = html;
+}
+
+function buildFlashBanner() {
+  // 30% chance of flash day
+  const isFlash = Math.random() > 0.7;
+  if(isFlash) {
+    document.getElementById('flash-banner-wrap').innerHTML = `
+    <div class="flash-banner">
+      <div class="flash-icon">⚡</div>
+      <div class="flash-text">
+        <div class="flash-title">FLASH DAY — Today only!</div>
+        <div class="flash-sub">Announced each Monday · keeps everyone engaged all week</div>
+      </div>
+      <div class="flash-multiplier">2×</div>
+    </div>`;
+  }
+}
+
+const VOTE_DATA = [
+  {addr:'3Fk9...aB7c',msgs:34,meetings:3,docs:7,emails:18,consensus:null},
+  {addr:'9mPq...Xw2f',msgs:28,meetings:4,docs:5,emails:12,consensus:null},
+  {addr:'Bc4L...qR8e',msgs:19,meetings:2,docs:3,emails:9,consensus:null},
+];
+
+function buildVoteCards() {
+  let html = '';
+  VOTE_DATA.forEach((v,i)=>{
+    html += `
+    <div class="vote-card" id="vcard-${i}">
+      <div class="vote-card-header">
+        <div>
+          <div class="vote-wallet">${v.addr}</div>
+          <div class="vote-day" style="margin-top:4px;font-size:12px;color:var(--muted)">Activity summary — Day 7</div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">anonymous</div>
+      </div>
+      <div class="activity-chips">
+        <div class="chip">💬 Messages <span class="chip-val">${v.msgs}</span></div>
+        <div class="chip">📅 Meetings <span class="chip-val">${v.meetings}</span></div>
+        <div class="chip">📄 Docs edited <span class="chip-val">${v.docs}</span></div>
+        <div class="chip">📧 Emails <span class="chip-val">${v.emails}</span></div>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Was this a productive day? Your vote is anonymous and wallet-signed on-chain.</p>
+      <div class="vote-actions">
+        <button class="vote-btn yes" onclick="castVote(${i},'yes')">👍 Yes, good day</button>
+        <button class="vote-btn no" onclick="castVote(${i},'no')">👎 Not really</button>
+        <button class="vote-btn skip" onclick="castVote(${i},'skip')">⏭ Skip</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('vote-cards').innerHTML = html;
+}
+
+function castVote(i, verdict) {
+  const card = document.getElementById('vcard-'+i);
+  const icons = {yes:'✅',no:'❌',skip:'⏭️'};
+  const msgs = {yes:'Vote committed on-chain.',no:'Vote committed on-chain.',skip:'Skipped.'};
+  card.innerHTML = `<div class="voted-badge">${icons[verdict]} ${msgs[verdict]} <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">tx: ${randomTx()}</span></div>`;
+  if(verdict!=='skip') showToast('⛓️','Vote committed','Signed with your wallet key. Commit-reveal hash recorded on Solana.');
+}
+
+const BADGES_DATA = [
+  {icon:'🔥',name:'Hot streak',desc:'7 days in top 5',earned:true},
+  {icon:'🗳️',name:'Faithful voter',desc:'Voted 7 days straight',earned:true},
+  {icon:'👑',name:'Day king',desc:'#1 on the leaderboard',earned:false},
+  {icon:'⚡',name:'Flash master',desc:'Win on a 2× flash day',earned:false},
+  {icon:'🎖️',name:'Consensus king',desc:'95%+ consensus for 3 days',earned:false},
+  {icon:'🤝',name:'Team player',desc:'Vote every day for 2 weeks',earned:false},
+  {icon:'🏆',name:'Month champion',desc:'Finish top 3 at month end',earned:false},
+  {icon:'💎',name:'Diamond hands',desc:'Never miss a daily commit',earned:true},
+  {icon:'🕵️',name:'Anon legend',desc:'Win without revealing wallet',earned:false},
+  {icon:'🚀',name:'Early bird',desc:'First to submit day 1',earned:true},
+];
+
+function buildBadges() {
+  let html = '';
+  BADGES_DATA.forEach(b=>{
+    html += `<div class="badge-card ${b.earned?'earned':'locked'}">
+      <div class="badge-icon">${b.icon}</div>
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-desc">${b.desc}</div>
+      ${b.earned?'<div class="badge-earned-label">✓ MINTED ON-CHAIN</div>':'<div class="badge-earned-label" style="color:var(--muted)">LOCKED</div>'}
+    </div>`;
+  });
+  document.getElementById('badges-grid').innerHTML = html;
+}
+
+function buildMiniChart() {
+  const vals = [45,62,38,71,58,80,65,72,55,68,74,61,88,95];
+  const max = Math.max(...vals);
+  let html = '';
+  vals.forEach((v,i)=>{
+    const h = Math.round((v/max)*60);
+    html += `<div class="bar${i===vals.length-1?' today':''}" style="height:${h}px" title="Day ${i+1}: ${v}pts"></div>`;
+  });
+  document.getElementById('mini-chart').innerHTML = html;
+}
+
+const TX_DATA = [
+  {type:'Daily commit',wallet:'3Fk9...aB7c',time:'2 min ago'},
+  {type:'Vote cast',wallet:'7xK3...mNp2',time:'5 min ago'},
+  {type:'Daily commit',wallet:'7xK3...mNp2',time:'18 min ago'},
+  {type:'Daily commit',wallet:'9mPq...Xw2f',time:'24 min ago'},
+  {type:'Badge minted',wallet:'3Fk9...aB7c',time:'1h ago'},
+];
+
+function buildTxLog() {
+  let html = '';
+  TX_DATA.forEach(t=>{
+    html += `<div class="chain-row">
+      <div class="chain-label">${t.type} · <span style="font-family:var(--font-mono);font-size:11px">${t.wallet}</span></div>
+      <div class="chain-val" style="font-size:11px;color:var(--muted)">${t.time}</div>
+    </div>`;
+  });
+  document.getElementById('tx-log').innerHTML = html;
+}
+
+function buildAdminCfg() {
+  const durStr = cfg.duration<30?cfg.duration+' days':cfg.duration==30?'1 month':Math.round(cfg.duration/7)+' weeks';
+  document.getElementById('admin-cfg-display').innerHTML = `
+    <div class="chain-row"><div class="chain-label">Challenge name</div><div class="chain-val">${cfg.name}</div></div>
+    <div class="chain-row"><div class="chain-label">Participants</div><div class="chain-val">${cfg.employees} employees</div></div>
+    <div class="chain-row"><div class="chain-label">Duration</div><div class="chain-val">${durStr}</div></div>
+    <div class="chain-row"><div class="chain-label">Reward pool</div><div class="chain-val">$${cfg.reward.toLocaleString()} USDC</div></div>
+    <div class="chain-row"><div class="chain-label">Top rewarded</div><div class="chain-val">Top ${cfg.rewardN}</div></div>
+    <div class="chain-row"><div class="chain-label">Vote threshold</div><div class="chain-val">${cfg.voteThreshold} peers agree</div></div>
+    <div class="chain-row"><div class="chain-label">Raw data access</div><div class="chain-val" style="color:var(--accent3)">❌ Not available</div></div>
+  `;
+}
+
+// ═══════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════
+function showPage(name, navEl) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+function showToast(icon,title,body) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-body').textContent = body;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 4000);
+}
+
+function randomTx() {
+  const chars='0123456789abcdef';
+  return Array(8).fill(0).map(()=>chars[Math.floor(Math.random()*chars.length)]).join('')+'...';
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+updateReward();
+
+// Animate sidebar timer
+let remaining = 23*24*60*60 + 14*3600;
+setInterval(()=>{
+  remaining--;
+  const d = Math.floor(remaining/86400);
+  const h = Math.floor((remaining%86400)/3600);
+  const el = document.getElementById('sb-timer');
+  if(el) el.textContent = d+'d '+h+'h';
+},1000);
+
+// Wallet button toggle
+function handleWalletBtn() {
+  if (walletPubkey) {
+    disconnectPhantom();
+  } else {
+    connectPhantom().then(pk => {
+      if (pk && typeof fetchLeaderboard === 'function') {
+        const pda = sessionStorage.getItem('challengePDA');
+        if (pda) fetchLeaderboard(pda).then(data => {
+          if (data.length) buildLeaderboard(); // refresh with wallet highlighted
+        });
+      }
+    });
+  }
+}
+
+// Override launch() to also call txInitializeChallenge
+const _origLaunch = launch;
+window.launch = async function() {
+  const btn = document.getElementById('launch-btn');
+  btn.textContent = '⏳ Deploying...';
+  btn.disabled = true;
+
+  // Try on-chain deploy if wallet connected
+  if (walletPubkey) {
+    await txInitializeChallenge({
+      name:          cfg.name,
+      durationDays:  cfg.duration,
+      rewardTopN:    cfg.rewardN,
+      voteThreshold: parseInt(cfg.voteThreshold),
+    });
+  }
+
+  setTimeout(()=>{
+    initDashboard();
+    document.getElementById('screen-setup').classList.remove('active');
+    document.getElementById('screen-dashboard').classList.add('active');
+    showToast('🚀','Challenge deployed!','Smart contract live on Solana devnet. Leaderboard is now active.');
+  }, walletPubkey ? 2500 : 1800);
+};
+</script>
+<script src="js/solana.js"></script>
+</body>
+</html>
