@@ -1,0 +1,6 @@
+dist/
+node_modules/
+.gh-pages-tmp/
+.DS_Store
+*.env
+.env.*

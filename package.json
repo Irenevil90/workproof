@@ -1,0 +1,12 @@
+{
+  "name": "workproof",
+  "version": "0.1.0",
+  "description": "Verified contribution protocol — peer-validated, blockchain-settled, privacy-first",
+  "scripts": {
+    "dev": "node scripts/server.js",
+    "build": "node scripts/build.js",
+    "deploy": "npm run build && node scripts/deploy-gh-pages.js",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {}
+}
