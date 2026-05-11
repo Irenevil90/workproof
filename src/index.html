@@ -663,7 +663,10 @@ input[type=range]::-webkit-slider-thumb {
 <!-- ═══════════════════ SETUP WIZARD ═══════════════════ -->
 <div id="screen-setup" class="screen">
 <div class="wizard">
-  <div class="logo"><div class="logo-dot"></div>WorkProof Protocol</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:48px">
+    <div class="logo" style="margin-bottom:0"><div class="logo-dot"></div>WorkProof Protocol</div>
+    <button class="btn btn-secondary" style="font-size:12px;padding:7px 16px" onclick="goLanding()">← Exit</button>
+  </div>
 
   <!-- PROGRESS -->
   <div class="progress-track">
@@ -1041,8 +1044,11 @@ input[type=range]::-webkit-slider-thumb {
     <!-- ADMIN PAGE -->
     <div class="page" id="page-admin">
       <div class="topbar"><div class="topbar-title">Admin panel</div></div>
+      <div style="background:rgba(255,200,74,0.06);border:1px solid rgba(255,200,74,0.2);border-radius:12px;padding:16px 20px;margin-bottom:16px;font-size:13px;color:var(--muted)">
+        🔓 <strong style="color:var(--gold)">Hackathon mode:</strong> Anyone can create challenges for judging purposes. In production, only company-authorized wallets (verified via on-chain allowlist) will be able to deploy challenges.
+      </div>
       <div style="background:rgba(255,107,74,0.06);border:1px solid rgba(255,107,74,0.2);border-radius:12px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:var(--muted)">
-        ⚠️ Admin view shows only aggregated stats. Raw activity data is encrypted client-side and cannot be accessed by anyone except the employee who owns the wallet.
+        🔒 Admin view shows only aggregated stats. Raw activity data is encrypted client-side — inaccessible to anyone except the employee who owns the wallet.
       </div>
       <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
         <div class="stat-card">
@@ -1561,9 +1567,28 @@ function _connectedWallet(){return typeof walletPubkey!=='undefined'&&walletPubk
 
 function goLanding(){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});var el=document.getElementById('screen-landing');if(el)el.classList.add('active');updateLandingWallet();}
 
-function goAdmin(){if(!_connectedWallet()){connectPhantom().then(function(pk){if(pk)goAdmin();});return;}document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});var el=document.getElementById('screen-setup');if(el)el.classList.add('active');nextStep(1);}
+function goAdmin(){
+  // Show disclaimer about authorization
+  if(!_connectedWallet()){
+    connectPhantom().then(function(pk){if(pk)goAdmin();});
+    return;
+  }
+  // Clear previous challenge data
+  var nameEl=document.getElementById('cfg-name');
+  var compEl=document.getElementById('cfg-company');
+  if(nameEl) nameEl.value='';
+  if(compEl) compEl.value='';
+  // Reset cfg
+  cfg.name=''; cfg.company=''; cfg.employees=10; cfg.duration=30; cfg.rewardN=1; cfg.reward=1000; cfg.token='USDC';
+  // Show disclaimer toast
+  showToast('ℹ️','Open access — hackathon mode','In production only authorized wallets can create challenges. Judges can test freely.');
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  var el=document.getElementById('screen-setup');
+  if(el)el.classList.add('active');
+  nextStep(1);
+}
 
-function goCompetitor(){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});var el=document.getElementById('screen-competitor');if(el)el.classList.add('active');if(compJoined&&compChallenge){showCompDashboard();}else{var b=document.getElementById('comp-browser');var d=document.getElementById('comp-dashboard');if(b)b.style.display='block';if(d)d.style.display='none';buildChallengeList();}updateCompWalletUI();}
+function goCompetitor(){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});var el=document.getElementById('screen-competitor');if(el)el.classList.add('active');var b=document.getElementById('comp-browser');var d=document.getElementById('comp-dashboard');if(b)b.style.display='block';if(d)d.style.display='none';buildChallengeList();updateCompWalletUI();}
 
 function handleConnectFromLanding(){if(_connectedWallet()){updateLandingWallet();return;}connectPhantom().then(function(){updateLandingWallet();});}
 
@@ -1597,7 +1622,7 @@ function buildChallengeList(){
     var isJoined=ch.pda===joinedPDA2;
     var border=isJoined?'border-color:rgba(0,229,176,.5)':isOwn?'border-color:rgba(124,92,252,.5)':'';
     var badge=isJoined?'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.12);color:var(--accent2);font-family:var(--font-mono);font-size:10px;font-weight:700">✓ JOINED</span>':isOwn?'<span style="padding:3px 10px;border-radius:20px;background:rgba(124,92,252,.12);color:var(--accent);font-family:var(--font-mono);font-size:10px;font-weight:700">👑 YOURS</span>':'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.08);color:var(--accent2);font-family:var(--font-mono);font-size:10px">● Active</span>';
-    var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="goCompetitor()">Open dashboard →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\')">Join challenge →</button>';
+    var chJson=encodeURIComponent(JSON.stringify(ch));var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="openChallengeDashboard(\''+ch.pda+'\');">Open dashboard →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\')">Join challenge →</button>';
     return'<div class="challenge-card" style="'+border+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'+
         '<div><div class="cc-name">'+ch.name+'</div><div class="cc-company" style="margin-top:3px">'+ch.company+'</div></div>'+
@@ -1644,6 +1669,19 @@ function updateCompProfilePage(){var pk=_connectedWallet();var wallet=pk?pk.toSt
 function saveProfile(){var fn=document.getElementById('profile-firstname');var ln=document.getElementById('profile-lastname');if(!fn||!fn.value.trim())return;compProfile={firstname:fn.value.trim(),lastname:ln?ln.value.trim():'',displayName:fn.value.trim()+(ln&&ln.value.trim()?' '+ln.value.trim():'')};sessionStorage.setItem('comp_profile',JSON.stringify(compProfile));showToast('✅','Profile saved',compProfile.displayName);updateCompProfilePage();buildCompLeaderboard();buildCompVoteCards();}
 
 function copyProofLink(){var pk=_connectedWallet();var link='https://workproof.xyz/proof/'+(pk?pk.toString().slice(0,8):'demo');navigator.clipboard&&navigator.clipboard.writeText(link);showToast('📋','Link copied!',link);}
+
+
+function openChallengeDashboard(pda){
+  // Set the active challenge and go to its dashboard
+  var ch=MOCK_CHALLENGES.concat(JSON.parse(sessionStorage.getItem('live_challenges')||'[]')).find(function(c){return c.pda===pda;});
+  if(!ch) return;
+  compChallenge=ch;
+  compJoined=true;
+  sessionStorage.setItem('comp_challenge',JSON.stringify(ch));
+  sessionStorage.setItem('comp_joined','true');
+  sessionStorage.setItem('challengePDA',pda);
+  showCompDashboard();
+}
 
 function leaveChallenge(){if(!confirm('Leave this challenge? Your on-chain score history will be preserved.'))return;compJoined=false;compChallenge=null;['comp_joined','comp_challenge','challengePDA','participantPDA'].forEach(function(k){sessionStorage.removeItem(k);});showToast('👋','Left challenge','Score history preserved on-chain');goCompetitor();}
 
@@ -1710,7 +1748,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
   <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;margin-bottom:48px">● WorkProof Protocol</div>
   <h1><span data-i18n="Contribution">Contribution</span><br><span data-i18n="verified on-chain">verified on-chain</span></h1>
   <p class="tagline" data-i18n="Peer-validated, privacy-first recognition. Company admins set the challenge. Competitors prove their work. Blockchain settles the reward.">Peer-validated, privacy-first recognition. Company admins set the challenge. Competitors prove their work. Blockchain settles the reward.</p>
-  <div id="landing-wallet-status" style="margin-bottom:24px;font-family:var(--font-mono);font-size:11px;color:var(--accent2);min-height:18px;text-align:center"></div>
+  <!-- wallet status hidden on landing -->
   <div class="role-cards">
     <div class="role-card admin" onclick="goAdmin()">
       <div class="role-icon">🏢</div>
