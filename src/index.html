@@ -1219,12 +1219,13 @@ async function launch() {
   }
 
   btn.textContent = '✅ Deployed!';
-  // Push the new challenge into the mock list so it appears in the competitor view
+
+  // Store challenge for competitor view (NOT as joined — admin ≠ participant)
   var newChallenge = {
     pda: sessionStorage.getItem('challengePDA') || ('Live-'+Date.now()),
     name: cfg.name,
     company: cfg.company,
-    participants: 1,
+    participants: 0,
     maxParticipants: cfg.employees,
     daysLeft: cfg.duration,
     totalDays: cfg.duration,
@@ -1232,21 +1233,31 @@ async function launch() {
     token: cfg.token || 'USDC',
     topN: cfg.rewardN,
     active: true,
-    isOwn: true,
+    isOwn: false,   // ← NOT marked as joined
+    isCreated: true, // ← visual badge only
   };
-  // Store for competitor view
   var existing = JSON.parse(sessionStorage.getItem('live_challenges') || '[]');
   existing.unshift(newChallenge);
   sessionStorage.setItem('live_challenges', JSON.stringify(existing));
 
-  setTimeout(()=>{
-    // Reset wizard for next use
+  // Clear the challengePDA so competitor flow doesn't think we joined
+  sessionStorage.removeItem('challengePDA');
+  sessionStorage.removeItem('participantPDA');
+  sessionStorage.removeItem('comp_joined');
+  sessionStorage.removeItem('comp_challenge');
+
+  setTimeout(async () => {
+    // Disconnect wallet — admin and competitor are separate roles
+    if (typeof disconnectPhantom === 'function') {
+      await disconnectPhantom();
+    }
+    // Reset wizard
     document.getElementById('launch-btn').textContent = '🚀 Deploy challenge';
     document.getElementById('launch-btn').disabled = false;
-    // Go back to landing
-    goLanding();
-    showToast('🚀','Challenge live!', cfg.name + ' is now on Solana devnet · visible in Competitor view');
-  }, 1200);
+    // Back to landing
+    goLanding('✅ Challenge deployed · wallet disconnected · now connect as Competitor to join');
+    showToast('🚀', 'Challenge deployed!', cfg.name + ' is live · connect as Competitor to join');
+  }, 1400);
 }
 
 function resetWizard() {
@@ -1594,7 +1605,13 @@ var powHistory=JSON.parse(sessionStorage.getItem('pow_history')||'[]');
 
 function _connectedWallet(){return typeof walletPubkey!=='undefined'&&walletPubkey?walletPubkey:null;}
 
-function goLanding(){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});var el=document.getElementById('screen-landing');if(el)el.classList.add('active');updateLandingWallet();}
+function goLanding(hint){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  var el=document.getElementById('screen-landing');if(el)el.classList.add('active');
+  updateLandingWallet();
+  var hintEl=document.getElementById('landing-role-hint');
+  if(hintEl) hintEl.textContent=hint||'';
+}
 
 function goAdmin(){
   // Show disclaimer about authorization
@@ -1625,9 +1642,13 @@ function updateLandingWallet(){
   var status=document.getElementById('landing-wallet-status');
   var pk=_connectedWallet();
   if(status) status.textContent=pk?'👻 '+pk.toString().slice(0,8)+'... connected':'';
-  // Update comp header wallet button if visible
+  // Update comp header wallet button
   var hdrBtn=document.getElementById('comp-header-wallet');
-  if(hdrBtn&&pk){hdrBtn.textContent='👻 '+pk.toString().slice(0,6)+'...';hdrBtn.style.color='var(--accent2)';}
+  if(pk){
+    if(hdrBtn){hdrBtn.textContent='👻 '+pk.toString().slice(0,6)+'...';hdrBtn.style.color='var(--accent2)';hdrBtn.style.borderColor='rgba(0,229,176,.4)';}
+  } else {
+    if(hdrBtn){hdrBtn.textContent='👻 Connect Phantom';hdrBtn.style.color='';hdrBtn.style.borderColor='';}
+  }
 }
 
 
@@ -1667,7 +1688,7 @@ function buildChallengeList(){
     var joinedPDA2=sessionStorage.getItem('challengePDA');
     var isJoined=ch.pda===joinedPDA2;
     var border=isJoined?'border-color:rgba(0,229,176,.5)':isOwn?'border-color:rgba(124,92,252,.5)':'';
-    var badge=isJoined?'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.12);color:var(--accent2);font-family:var(--font-mono);font-size:10px;font-weight:700">✓ JOINED</span>':isOwn?'<span style="padding:3px 10px;border-radius:20px;background:rgba(124,92,252,.12);color:var(--accent);font-family:var(--font-mono);font-size:10px;font-weight:700">👑 YOURS</span>':'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.08);color:var(--accent2);font-family:var(--font-mono);font-size:10px">● Active</span>';
+    var isCreated=ch.isCreated;var badge=isJoined?'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.12);color:var(--accent2);font-family:var(--font-mono);font-size:10px;font-weight:700">✓ JOINED</span>':isCreated?'<span style="padding:3px 10px;border-radius:20px;background:rgba(124,92,252,.12);color:var(--accent);font-family:var(--font-mono);font-size:10px;font-weight:700">👑 CREATED</span>':'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.08);color:var(--accent2);font-family:var(--font-mono);font-size:10px">● Active</span>';
     var chJson=encodeURIComponent(JSON.stringify(ch));var walletConnected=!!_connectedWallet();var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="openChallengeDashboard(\''+ch.pda+'\');">Open dashboard →</button>':walletConnected?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\');">Join challenge →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px;opacity:0.5" onclick="connectWalletForBrowser()">Connect wallet first</button>';
     return'<div class="challenge-card" style="'+border+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'+
@@ -1833,6 +1854,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
       <div class="role-tag" data-i18n="Join challenge">Join challenge</div>
     </div>
   </div>
+  <div id="landing-role-hint" style="font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;min-height:18px"></div>
   <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);text-align:center">Solana devnet · J8ff2KX2 · privacy-first</div>
 </div>
 </div>
