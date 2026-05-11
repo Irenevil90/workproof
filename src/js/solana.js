@@ -9,7 +9,7 @@
  */
 
 // ─── CONFIG ───────────────────────────────────────────────
-const PROGRAM_ID     = '7Gy4PJzFvtcavLwDWUrWgfWNN56hweEbrUmjyfCWGjCC';
+const PROGRAM_ID     = 'J8ff2KX2Csxmr2FveXN1z42tDxq99ojZKMs3qdKJVBXg';
 const DEVNET_RPC     = 'https://api.devnet.solana.com';
 const USDC_DEVNET    = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'; // devnet USDC
 

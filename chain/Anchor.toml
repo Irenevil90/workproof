@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-workproof = "7Gy4PJzFvtcavLwDWUrWgfWNN56hweEbrUmjyfCWGjCC"
+workproof = "J8ff2KX2Csxmr2FveXN1z42tDxq99ojZKMs3qdKJVBXg"
 
 [registry]
 url = "https://api.apr.dev"
