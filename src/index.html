@@ -1213,11 +1213,33 @@ async function launch() {
   }
 
   btn.textContent = '✅ Deployed!';
+  // Push the new challenge into the mock list so it appears in the competitor view
+  var newChallenge = {
+    pda: sessionStorage.getItem('challengePDA') || ('Live-'+Date.now()),
+    name: cfg.name,
+    company: cfg.company,
+    participants: 1,
+    maxParticipants: cfg.employees,
+    daysLeft: cfg.duration,
+    totalDays: cfg.duration,
+    reward: cfg.reward.toLocaleString() + ' ' + (cfg.token||'USDC'),
+    token: cfg.token || 'USDC',
+    topN: cfg.rewardN,
+    active: true,
+    isOwn: true,
+  };
+  // Store for competitor view
+  var existing = JSON.parse(sessionStorage.getItem('live_challenges') || '[]');
+  existing.unshift(newChallenge);
+  sessionStorage.setItem('live_challenges', JSON.stringify(existing));
+
   setTimeout(()=>{
-    initDashboard();
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.getElementById('screen-dashboard').classList.add('active');
-    showToast('🚀','Challenge on-chain!','Program J8ff2KX2 · leaderboard is live');
+    // Reset wizard for next use
+    document.getElementById('launch-btn').textContent = '🚀 Deploy challenge';
+    document.getElementById('launch-btn').disabled = false;
+    // Go back to landing
+    goLanding();
+    showToast('🚀','Challenge live!', cfg.name + ' is now on Solana devnet · visible in Competitor view');
   }, 1200);
 }
 
@@ -1545,9 +1567,57 @@ function goCompetitor(){document.querySelectorAll('.screen').forEach(function(s)
 
 function handleConnectFromLanding(){if(_connectedWallet()){updateLandingWallet();return;}connectPhantom().then(function(){updateLandingWallet();});}
 
-function updateLandingWallet(){var lbl=document.getElementById('landing-wallet-label');if(!lbl)return;var pk=_connectedWallet();lbl.textContent=pk?'👻 '+pk.toString().slice(0,8)+'... connected ✓':'👻 Connect Phantom to continue';}
+function updateLandingWallet(){
+  var status=document.getElementById('landing-wallet-status');
+  var pk=_connectedWallet();
+  if(status) status.textContent=pk?'👻 '+pk.toString().slice(0,8)+'... connected':'';
+  // Update comp header wallet button if visible
+  var hdrBtn=document.getElementById('comp-header-wallet');
+  if(hdrBtn&&pk){hdrBtn.textContent='👻 '+pk.toString().slice(0,6)+'...';hdrBtn.style.color='var(--accent2)';}
+}
 
-function buildChallengeList(){var el=document.getElementById('challenge-list');if(!el)return;el.innerHTML=MOCK_CHALLENGES.map(function(ch){var pct=Math.round((1-ch.daysLeft/ch.totalDays)*100);return'<div class="challenge-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div class="cc-name">'+ch.name+'</div><div class="cc-company">'+ch.company+'</div></div><div class="tag tag-live">● Active</div></div><div class="cc-stats"><div class="cc-stat">Participants <span>'+ch.participants+'/'+ch.maxParticipants+'</span></div><div class="cc-stat">Days left <span>'+ch.daysLeft+'</span></div><div class="cc-stat">Top '+ch.topN+' rewarded</div></div><div style="display:flex;gap:10px;align-items:center;margin-bottom:16px"><div class="cc-reward-pill">🏆 '+ch.reward+'</div><div style="font-size:12px;color:var(--muted)">locked in escrow</div></div><div style="height:4px;background:var(--border2);border-radius:2px;margin-bottom:20px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px"></div></div><div style="display:flex;gap:10px"><button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\')">Join challenge →</button><button class="btn btn-secondary" style="font-size:13px;padding:10px 18px" onclick="showToast(\'ℹ️\',\''+ch.name+'\',\''+ch.reward+' · '+ch.daysLeft+' days left\')">Preview</button></div></div>';}).join('');}
+function buildChallengeList(){
+  var el=document.getElementById('challenge-list');if(!el)return;
+  // Merge mock challenges with any live ones created via admin
+  var liveChallenges=JSON.parse(sessionStorage.getItem('live_challenges')||'[]');
+  var pk=_connectedWallet();
+  // Mark which ones user has joined
+  var joinedPDA=sessionStorage.getItem('challengePDA');
+  var allChallenges=liveChallenges.concat(MOCK_CHALLENGES);
+  
+  // Show wallet status in header
+  var hdrBtn=document.getElementById('comp-header-wallet');
+  if(hdrBtn&&pk){hdrBtn.textContent='👻 '+pk.toString().slice(0,6)+'...';hdrBtn.style.color='var(--accent2)';}
+
+  el.innerHTML=allChallenges.map(function(ch){
+    var isJoined=ch.pda===joinedPDA;
+    var isOwn=ch.isOwn;
+    var pct=Math.round((1-ch.daysLeft/ch.totalDays)*100);
+    var joinedPDA2=sessionStorage.getItem('challengePDA');
+    var isJoined=ch.pda===joinedPDA2;
+    var border=isJoined?'border-color:rgba(0,229,176,.5)':isOwn?'border-color:rgba(124,92,252,.5)':'';
+    var badge=isJoined?'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.12);color:var(--accent2);font-family:var(--font-mono);font-size:10px;font-weight:700">✓ JOINED</span>':isOwn?'<span style="padding:3px 10px;border-radius:20px;background:rgba(124,92,252,.12);color:var(--accent);font-family:var(--font-mono);font-size:10px;font-weight:700">👑 YOURS</span>':'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.08);color:var(--accent2);font-family:var(--font-mono);font-size:10px">● Active</span>';
+    var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="goCompetitor()">Open dashboard →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\')">Join challenge →</button>';
+    return'<div class="challenge-card" style="'+border+'">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'+
+        '<div><div class="cc-name">'+ch.name+'</div><div class="cc-company" style="margin-top:3px">'+ch.company+'</div></div>'+
+        badge+
+      '</div>'+
+      '<div class="cc-stats">'+
+        '<div class="cc-stat">👥 <span>'+ch.participants+'/'+ch.maxParticipants+'</span></div>'+
+        '<div class="cc-stat">⏱ <span>'+ch.daysLeft+' days</span> left</div>'+
+        '<div class="cc-stat">🏅 Top '+ch.topN+'</div>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+        '<div class="cc-reward-pill">🏆 '+ch.reward+'</div>'+
+        '<span style="font-size:11px;color:var(--muted)">locked · auto-released</span>'+
+      '</div>'+
+      '<div style="height:3px;background:var(--border2);border-radius:2px;margin-bottom:18px;overflow:hidden">'+
+        '<div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px">'+actionBtn+'<button class="btn btn-secondary" style="font-size:13px;padding:10px 18px" onclick="showToast(\'ℹ️\',\''+ch.name+'\',\''+ch.reward+' · '+ch.daysLeft+' days\')">Details</button></div>'+
+    '</div>';
+  }).join('');}
 
 function joinChallenge(pda){if(!_connectedWallet()){showToast('⚠️','Connect Phantom first','');connectPhantom().then(function(pk){if(pk)joinChallenge(pda);});return;}var modal=document.getElementById('profile-modal');if(modal){modal.style.display='flex';modal.dataset.pda=pda;}}
 
@@ -1640,11 +1710,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
   <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;margin-bottom:48px">● WorkProof Protocol</div>
   <h1><span data-i18n="Contribution">Contribution</span><br><span data-i18n="verified on-chain">verified on-chain</span></h1>
   <p class="tagline" data-i18n="Peer-validated, privacy-first recognition. Company admins set the challenge. Competitors prove their work. Blockchain settles the reward.">Peer-validated, privacy-first recognition. Company admins set the challenge. Competitors prove their work. Blockchain settles the reward.</p>
-  <div style="margin-bottom:20px;width:100%;max-width:640px">
-    <button class="btn btn-secondary" style="width:100%;justify-content:center;padding:12px;font-size:13px" onclick="handleConnectFromLanding()">
-      <span id="landing-wallet-label">👻 Connect Phantom to continue</span>
-    </button>
-  </div>
+  <div id="landing-wallet-status" style="margin-bottom:24px;font-family:var(--font-mono);font-size:11px;color:var(--accent2);min-height:18px;text-align:center"></div>
   <div class="role-cards">
     <div class="role-card admin" onclick="goAdmin()">
       <div class="role-icon">🏢</div>
@@ -1667,14 +1733,15 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
 <div id="screen-competitor" class="screen">
 <div class="competitor active">
   <div id="comp-browser" class="challenge-browser">
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:40px">
-      <button class="btn btn-secondary" style="padding:8px 16px;font-size:12px" onclick="goLanding()">← Back</button>
-      <div><div style="font-size:22px;font-weight:800" data-i18n="Open challenges">Open challenges</div><div style="font-size:13px;color:var(--muted)">Browse and join on-chain challenges</div></div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:32px">
+      <button class="btn btn-secondary" style="padding:8px 14px;font-size:12px;flex-shrink:0" onclick="goLanding()">← Back</button>
+      <div style="flex:1">
+        <div style="font-size:22px;font-weight:800" data-i18n="Open challenges">Open challenges</div>
+        <div style="font-size:13px;color:var(--muted)">Browse and join · wallet requested only when joining</div>
+      </div>
+      <button class="btn btn-secondary" style="font-size:11px;padding:7px 14px;flex-shrink:0" id="comp-header-wallet" onclick="connectPhantom().then(function(pk){if(pk)updateCompWalletUI();})">👻 Connect Phantom</button>
     </div>
-    <div id="comp-wallet-prompt" style="background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.3);border-radius:14px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;gap:16px">
-      <div style="flex:1"><div style="font-size:14px;font-weight:700;margin-bottom:4px">👻 Connect Phantom to join</div><div style="font-size:12px;color:var(--muted)" id="comp-wallet-status">Not connected</div></div>
-      <button class="btn btn-primary" style="font-size:12px;padding:10px 20px;flex-shrink:0" onclick="connectPhantom().then(pk=>{if(pk){document.getElementById('comp-wallet-status').textContent=pk.toString().slice(0,10)+'...';document.getElementById('comp-wallet-prompt').style.borderColor='rgba(0,229,176,.4)';}})">Connect</button>
-    </div>
+    <div id="comp-wallet-prompt" style="display:none"></div>
     <div id="challenge-list"></div>
   </div>
 
