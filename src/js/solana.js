@@ -24,16 +24,20 @@ let _solPrice    = null; // cached SOL/USD price
 
 // ─── SOL PRICE ─────────────────────────────────────────────
 async function fetchSolPrice() {
-  try {
-    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-    const data = await res.json();
-    _solPrice = data?.solana?.usd || null;
-    return _solPrice;
-  } catch {
-    // fallback to a rough estimate if CoinGecko is unavailable
-    _solPrice = 150;
-    return _solPrice;
+  const sources = [
+    { url: 'https://price.jup.ag/v6/price?ids=SOL', parse: d => d?.data?.SOL?.price },
+    { url: 'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT', parse: d => parseFloat(d?.price) },
+  ];
+  for (const { url, parse } of sources) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const val = parse(await res.json());
+      if (val && !isNaN(val)) { _solPrice = val; return _solPrice; }
+    } catch {}
   }
+  _solPrice = 155; // fallback
+  return _solPrice;
 }
 
 // Call on load
