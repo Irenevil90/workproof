@@ -66,6 +66,10 @@ body::before {
 /* SCREENS */
 .screen { display:none; position:relative; z-index:1; }
 .screen.active { display:block; }
+/* Competitor and dashboard screens need flex */
+#screen-competitor.active, #screen-dashboard.active { display:flex; flex-direction:column; }
+#screen-competitor.active > .competitor { flex:1; }
+#screen-dashboard.active > .dashboard { flex:1; }
 
 /* ═══════════════════════════════════════
    SETUP WIZARD
@@ -933,7 +937,7 @@ input[type=range]::-webkit-slider-thumb {
         <div class="stat-card" style="--accent-bar:var(--accent)">
           <div class="stat-icon">👥</div>
           <div class="stat-val" id="stat-employees">10</div>
-          <div class="stat-label">Participants</div>
+          <div class="stat-label" data-i18n="Participants">Participants</div>
         </div>
         <div class="stat-card" style="--accent-bar:var(--accent2)">
           <div class="stat-icon">🗳️</div>
@@ -1775,7 +1779,7 @@ async function confirmRegister(){
   showCompDashboard();
 }
 
-function showCompDashboard(){var b=document.getElementById('comp-browser');var d=document.getElementById('comp-dashboard');if(b)b.style.display='none';if(d)d.style.display='flex';var ch=compChallenge||MOCK_CHALLENGES[0];['comp-challenge-name','comp-stat-participants','comp-stat-reward','comp-my-rank'].forEach(function(id,i){var el=document.getElementById(id);if(el)el.textContent=[ch.name,ch.participants,ch.reward,'#3'][i];});buildCompLeaderboard();buildCompVoteCards();updatePowDisplay();updateCompProfilePage();startCompTimer();}
+function showCompDashboard(){var b=document.getElementById('comp-browser');var d=document.getElementById('comp-dashboard');if(b)b.style.display='none';if(d){d.style.display='flex';d.style.width='100%';}var ch=compChallenge||MOCK_CHALLENGES[0];['comp-challenge-name','comp-stat-participants','comp-stat-reward','comp-my-rank'].forEach(function(id,i){var el=document.getElementById(id);if(el)el.textContent=[ch.name,ch.participants,ch.reward,'#3'][i];});buildCompLeaderboard();buildCompVoteCards();updatePowDisplay();updateCompProfilePage();startCompTimer();}
 
 function showCompPage(name,navEl){document.querySelectorAll('#comp-dashboard .page').forEach(function(p){p.classList.remove('active');});var pg=document.getElementById('comp-page-'+name);if(pg)pg.classList.add('active');document.querySelectorAll('.comp-sidebar .nav-item').forEach(function(n){n.classList.remove('active');});if(navEl)navEl.classList.add('active');if(name==='pow')updatePowDisplay();if(name==='profile'){updateCompProfilePage();updateRepDisplay();}}
 
@@ -1898,7 +1902,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
 .role-card.admin .role-tag{background:rgba(124,92,252,.15);color:var(--accent);}
 .role-card.player .role-tag{background:rgba(0,229,176,.12);color:var(--accent2);}
 .competitor{display:none;min-height:100vh;position:relative;z-index:1;}
-.competitor.active{display:flex;}
+.competitor.active{display:flex;width:100%;}
 .challenge-browser{max-width:720px;margin:0 auto;padding:48px 24px;width:100%;}
 .challenge-card{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:24px;margin-bottom:16px;transition:border-color .2s;}
 .challenge-card:hover{border-color:rgba(124,92,252,.4);}
@@ -1908,9 +1912,9 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
 .cc-stat{font-size:12px;color:var(--muted);}
 .cc-stat span{color:var(--text);font-weight:600;}
 .cc-reward-pill{padding:6px 14px;border-radius:20px;font-family:var(--font-mono);font-size:12px;font-weight:700;background:rgba(255,200,74,.12);color:var(--gold);border:1px solid rgba(255,200,74,.2);}
-.comp-dash{flex:1;display:flex;width:100%;min-height:100vh;}
-.comp-sidebar{width:220px;min-width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:28px 16px;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;}
-.comp-main{flex:1;min-width:0;padding:28px 32px;overflow-y:auto;max-width:calc(100vw - 220px);}
+.comp-dash{flex:1;display:flex;width:100%;min-height:100vh;overflow:hidden;}
+.comp-sidebar{width:220px;min-width:220px;max-width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:28px 16px;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;box-sizing:border-box;}
+.comp-main{flex:1;min-width:0;width:calc(100% - 220px);padding:28px 24px;overflow-y:auto;box-sizing:border-box;}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:36px;width:100%;max-width:480px;animation:fadeUp .3s ease;}
 .modal-box h2{font-size:24px;font-weight:800;margin-bottom:8px;}
@@ -1960,7 +1964,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
     <div id="challenge-list"></div>
   </div>
 
-  <div id="comp-dashboard" style="display:none;flex:1;flex-direction:column" class="comp-dash">
+    <div id="comp-dashboard" class="comp-dash" style="display:none;">
     <div class="comp-sidebar">
       <div class="sidebar-logo"><div class="logo-dot"></div>WorkProof</div>
       <button id="comp-wallet-btn" class="btn btn-secondary" style="font-size:11px;padding:8px 14px;margin-bottom:16px;width:100%;justify-content:center" onclick="handleCompWalletBtn()">👻 Connect</button>
@@ -1995,15 +1999,15 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
           <div class="stat-card" style="--accent-bar:var(--accent3)"><div class="stat-icon">📍</div><div class="stat-val" id="comp-my-rank">#—</div><div class="stat-label" data-i18n="Your rank">Your rank</div></div>
         </div>
         <div class="leaderboard-wrap">
-          <div class="lb-header"><div><div class="lb-title">Rankings — names visible to voters</div><div class="lb-subtitle">Vote is always anonymous on-chain</div></div></div>
-          <div style="display:grid;grid-template-columns:36px 1fr 72px 72px 60px 90px;padding:8px 16px;border-bottom:1px solid var(--border);gap:4px"><div class="lb-col-label">#</div><div class="lb-col-label">Participant</div><div class="lb-col-label" style="text-align:right">Score</div><div class="lb-col-label" style="text-align:right">Consensus</div><div class="lb-col-label" style="text-align:center">Streak</div><div class="lb-col-label" style="text-align:right">Reward</div></div>
+          <div class="lb-header"><div><div class="lb-title" data-i18n="Rankings">Rankings</div><div class="lb-subtitle" data-i18n="Vote is always anonymous on-chain">Vote is always anonymous on-chain</div></div></div>
+          <div style="display:grid;grid-template-columns:32px 1fr 70px 70px 55px 85px;padding:8px 16px;border-bottom:1px solid var(--border);gap:4px"><div class="lb-col-label">#</div><div class="lb-col-label">Participant</div><div class="lb-col-label" style="text-align:right">Score</div><div class="lb-col-label" style="text-align:right">Consensus</div><div class="lb-col-label" style="text-align:center">Streak</div><div class="lb-col-label" style="text-align:right">Reward</div></div>
           <div id="comp-lb-body"></div>
         </div>
       </div>
 
       <div class="page" id="comp-page-vote">
         <div class="topbar"><div class="topbar-title" data-i18n="Vote inbox">Vote inbox</div><div class="topbar-right"><div class="tag tag-live" id="comp-vote-count">3 pending</div></div></div>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:24px">You see colleagues' names to evaluate them fairly. Your vote is wallet-signed and anonymous — <strong style="color:var(--text)">no one can see who voted what.</strong></p>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:24px" data-i18n-html="vote-intro">You see colleagues' names to evaluate them fairly. Your vote is wallet-signed and anonymous — <strong style="color:var(--text)">no one can see who voted what.</strong></p>
         <div id="comp-vote-cards"></div>
       </div>
 
