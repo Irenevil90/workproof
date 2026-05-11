@@ -1567,9 +1567,6 @@ setInterval(()=>{
 },1000);
 
 // COMPETITOR FLOW FUNCTIONS
-// Clear stale live_challenges on page refresh
-(function(){try{sessionStorage.removeItem('live_challenges');}catch(e){}})();
-
 var MOCK_CHALLENGES=[{
   pda:'WorkProofDemo1111111111111111111111111111111',
   name:'Colosseum Frontier Challenge',
@@ -1747,11 +1744,60 @@ function buildCompLeaderboard(){var ch=compChallenge||MOCK_CHALLENGES[0];var spl
 
 function buildCompVoteCards(){var pk=_connectedWallet();var myPrefix=pk?pk.toString().slice(0,4):null;var toVote=COMP_PARTICIPANTS.filter(function(p){return!myPrefix||!p.addr.startsWith(myPrefix);});var pending=toVote.filter(function(p){return!sessionStorage.getItem('voted_'+p.addr);});var badge=document.getElementById('comp-vote-badge');if(badge)badge.textContent=pending.length;var count=document.getElementById('comp-vote-count');if(count)count.textContent=pending.length+' pending';var el=document.getElementById('comp-vote-cards');if(!el)return;var html=toVote.map(function(p){var voted=sessionStorage.getItem('voted_'+p.addr);var acts='<div class="chip">💬 '+Math.round(Math.random()*25+10)+'</div><div class="chip">📅 '+Math.round(Math.random()*4+1)+' mtgs</div><div class="chip">📄 '+Math.round(Math.random()*5+1)+' docs</div><div class="chip">📧 '+Math.round(Math.random()*12+4)+'</div>';if(voted)return'<div class="vote-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(124,92,252,.15);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+p.name.slice(0,1)+'</div><div><div style="font-size:14px;font-weight:700">'+p.name+'</div><div style="font-size:11px;color:var(--muted)">'+p.role+'</div></div></div><div class="voted-badge">'+(voted==='yes'?'✅ Good day':voted==='no'?'❌ Not really':'⏭️ Skipped')+' — committed</div></div>';var safeAddr=p.addr.replace(/\./g,'_');return'<div class="vote-card" id="cv-'+safeAddr+'"><div class="vote-card-header"><div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:8px;background:rgba(124,92,252,.15);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)">'+p.name.slice(0,1)+'</div><div><div style="font-size:14px;font-weight:700">'+p.name+'</div><div style="font-size:11px;color:var(--muted)">'+p.role+' · '+p.addr+'</div></div></div><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">your vote<br>is anonymous</div></div><div class="activity-chips" style="margin:12px 0">'+acts+'</div><p style="font-size:13px;color:var(--muted);margin-bottom:14px">Was <strong style="color:var(--text)">'+p.name+'</strong> productive today? Honest voting protects your reputation.</p><div class="vote-actions"><button class="vote-btn yes" onclick="castCompVote(\''+p.addr+'\',\'yes\')">👍 Yes, good day</button><button class="vote-btn no" onclick="castCompVote(\''+p.addr+'\',\'no\')">👎 Not really</button><button class="vote-btn skip" onclick="castCompVote(\''+p.addr+'\',\'skip\')">⏭ Skip</button></div></div>';}).join('');el.innerHTML=html||'<div style="color:var(--muted);text-align:center;padding:32px">All votes cast for today ✓</div>';}
 
-function castCompVote(addr,verdict){if(verdict==='skip'){sessionStorage.setItem('voted_'+addr,'skip');buildCompVoteCards();return;}if(typeof recordVoteWithIntegrity==='function')recordVoteWithIntegrity(addr,verdict,7);sessionStorage.setItem('voted_'+addr,verdict);var repMsg='';if(typeof getReputationDisplay==='function'){var pk=_connectedWallet();var r=getReputationDisplay(pk?pk.toString():'anon');repMsg=' · Rep: '+r.rep+' ('+r.tier+')';}showToast('🗳️','Vote committed anonymously','Majority verdict settles after window'+repMsg);buildCompVoteCards();}
+async function castCompVote(addr,verdict){
+  if(verdict==='skip'){sessionStorage.setItem('voted_'+addr,'skip');buildCompVoteCards();return;}
+  if(typeof recordVoteWithIntegrity==='function') recordVoteWithIntegrity(addr,verdict,7);
+  var pk=_connectedWallet();
+  var commitPDA=sessionStorage.getItem('commitPDA_'+addr);
+  var isReal=compChallenge&&compChallenge.pda&&compChallenge.pda.indexOf('Demo')<0&&compChallenge.pda.indexOf('WorkProof')<0;
+  if(pk&&isReal&&commitPDA&&typeof txCastVote==='function'){
+    try{
+      var sig=await txCastVote(commitPDA,verdict==='yes');
+      if(sig){
+        sessionStorage.setItem('voted_'+addr,verdict);
+        showToast('\u26d3\ufe0f','Vote on-chain!','tx: '+sig.slice(0,8)+'... | Solana devnet');
+        buildCompVoteCards();return;
+      }
+    }catch(e){console.warn('Vote tx:',e.message);}
+  }
+  sessionStorage.setItem('voted_'+addr,verdict);
+  var repMsg='';
+  if(typeof getReputationDisplay==='function'&&pk){var r=getReputationDisplay(pk.toString());repMsg=' \u00b7 Rep: '+r.rep+' ('+r.tier+')';}
+  showToast('\U0001F5F3\uFE0F','Vote recorded','Anonymous commit-reveal'+repMsg);
+  buildCompVoteCards();
+}
 
-function updatePowDisplay(){var score=sessionStorage.getItem('today_computed_score');var el=document.getElementById('pow-score-display');if(el)el.textContent=score?parseInt(score)+' pts':'— pts';var dayEl=document.getElementById('pow-day-num');if(dayEl)dayEl.textContent=powHistory.length;var hist=document.getElementById('pow-history');if(hist){if(!powHistory.length){hist.innerHTML='<div style="color:var(--muted);font-size:13px">No commits yet.</div>';}else{hist.innerHTML=powHistory.map(function(h){return'<div class="chain-row"><div class="chain-label">Day '+h.day+' · '+h.score+' pts · '+(h.source||'manual')+'</div><div class="chain-val" style="font-size:11px;color:var(--accent2)">'+(h.sig?h.sig.slice(0,8)+'…':'pending')+'</div></div>';}).join('');}}var activity=JSON.parse(sessionStorage.getItem('today_activity')||'{}');var chips=document.getElementById('pow-activity-summary');if(chips&&Object.keys(activity).length){chips.innerHTML=(activity.meetings!=null?'<div class="chip">📅 '+activity.meetings+' mtgs</div>':'')+(activity.commits!=null?'<div class="chip">🐙 '+activity.commits+' commits</div>':'')+(activity.source?'<div class="chip" style="color:var(--accent2)">✓ '+activity.source+'</div>':'');}var gcal=document.getElementById('pow-gcal-chips');if(gcal&&activity.meetings!=null)gcal.innerHTML='<div class="chip">📅 '+activity.meetings+' meetings</div><div class="chip">📆 '+(activity.totalEvents||0)+' events</div>';}
+function updatePowDisplay(){var score=sessionStorage.getItem('today_computed_score');var el=document.getElementById('pow-score-display');if(el)el.textContent=score?parseInt(score)+' pts':'— pts';var dayEl=document.getElementById('pow-day-num');if(dayEl)dayEl.textContent=powHistory.length;var hist=document.getElementById('pow-history');if(hist){if(!powHistory.length){hist.innerHTML='<div style="color:var(--muted);font-size:13px">No commits yet.</div>';}else{hist.innerHTML=powHistory.map(function(h){return'<div class="chain-row"><div class="chain-label">Day '+h.day+' · '+h.score+' pts · '+(h.source||'manual')+'</div><div class="chain-val" style="font-size:11px;color:var(--accent2)">'+(h.sig?h.sig.slice(0,8)+'…':'pending')+'</div></div>';}).join('');}}var activity=JSON.parse(sessionStorage.getItem('today_activity')||'{}');var chips=document.getElementById('pow-activity-summary');if(chips&&Object.keys(activity).length){chips.innerHTML=(activity.meetings!=null?'<div class="chip">📅 '+activity.meetings+' mtgs</div>':'')+(activity.commits!=null?'<div class="chip">🐙 '+activity.commits+' commits</div>':'')+(activity.source?'<div class="chip" style="color:var(--accent2)">✓ '+activity.source+'</div>':'');}var gcal=document.getElementById('pow-gcal-chips');if(gcal&&activity.meetings!=null)gcal.innerHTML='<div class="chip">📅 '+activity.meetings+' meetings</div><div class="chip">📆 '+(activity.totalEvents||0)+' events</div>';var today3=new Date().toISOString().slice(0,10);var lastSub=sessionStorage.getItem('pow_last_submit');var submitBtn=document.querySelector('[onclick="submitPow()"]');if(submitBtn){if(lastSub===today3){submitBtn.innerHTML='✅ Submitted today — come back tomorrow';submitBtn.style.opacity='0.5';submitBtn.style.pointerEvents='none';}else{submitBtn.innerHTML='⛓️ Commit score on-chain (Day '+powHistory.length+')';submitBtn.style.opacity='1';submitBtn.style.pointerEvents='auto';}}}
 
-function submitPow(){var pk=_connectedWallet();if(!pk){showToast('⚠️','Connect Phantom first','');return;}var score=parseInt(sessionStorage.getItem('today_computed_score')||'0')||Math.round(80+Math.random()*80);var day=powHistory.length;if(typeof txCommitDailyScore==='function'){txCommitDailyScore(score,day).then(function(result){var activity=JSON.parse(sessionStorage.getItem('today_activity')||'{}');powHistory.push({day:day,score:score,sig:result?result.sig:null,source:activity.source||'manual',ts:new Date().toISOString()});sessionStorage.setItem('pow_history',JSON.stringify(powHistory));updatePowDisplay();updateCompProfilePage();showToast('⛓️','Proof of work submitted!','Day '+day+' · '+score+' pts');});}else{var activity=JSON.parse(sessionStorage.getItem('today_activity')||'{}');powHistory.push({day:day,score:score,sig:null,source:activity.source||'manual',ts:new Date().toISOString()});sessionStorage.setItem('pow_history',JSON.stringify(powHistory));updatePowDisplay();updateCompProfilePage();showToast('⛓️','Score recorded (demo)','Day '+day+' · '+score+' pts');}}
+function submitPow(){var pk=_connectedWallet();if(!pk){showToast('⚠️','Connect Phantom first','');return;}
+  // ── One POW per day per challenge ──
+  var today=new Date().toISOString().slice(0,10);
+  var lastSubmit=sessionStorage.getItem('pow_last_submit');
+  if(lastSubmit===today){showToast('⚠️','Already submitted today','One proof of work per day per challenge. Come back tomorrow!');return;}
+  var score=parseInt(sessionStorage.getItem('today_computed_score')||'0')||Math.round(80+Math.random()*80);
+  var day=powHistory.length;
+  var isRealPow=compChallenge&&compChallenge.pda&&compChallenge.pda.indexOf('Demo')<0&&compChallenge.pda.indexOf('WorkProof')<0;
+  function savePow(sig,src){
+    var a=JSON.parse(sessionStorage.getItem('today_activity')||'{}');
+    powHistory.push({day:day,score:score,sig:sig,source:src||a.source||'manual',ts:new Date().toISOString()});
+    sessionStorage.setItem('pow_history',JSON.stringify(powHistory));
+    sessionStorage.setItem('pow_last_submit',new Date().toISOString().slice(0,10));
+    updatePowDisplay();updateCompProfilePage();
+  }
+  if(isRealPow&&typeof txCommitDailyScore==='function'){
+    txCommitDailyScore(score,day).then(function(result){
+      var sig=result?result.sig:null;
+      savePow(sig,'on-chain');
+      showToast('⛓️','Day '+day+' on-chain!',score+' pts'+(sig?' · tx: '+sig.slice(0,8)+'...':''));
+    }).catch(function(){
+      savePow(null,'demo');
+      showToast('⛓️','Score recorded (demo)',score+' pts · Day '+day);
+    });
+  }else{
+    savePow(null,'demo');
+    showToast('⛓️','Score recorded',score+' pts · Day '+day+' · 1 per day enforced');
+  }
+}
 
 function connectGithubPow(){var input=document.getElementById('pow-github-input');var username=input?input.value.trim():null;if(!username)username=sessionStorage.getItem('github_username');if(!username){showToast('⚠️','Enter GitHub username','');return;}sessionStorage.setItem('github_username',username);if(typeof fetchGithubActivity==='function')fetchGithubActivity(username).then(function(){updatePowDisplay();});}
 
@@ -1911,7 +1957,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
         </div>
         <div class="leaderboard-wrap">
           <div class="lb-header"><div><div class="lb-title">Rankings — names visible to voters</div><div class="lb-subtitle">Vote is always anonymous on-chain</div></div></div>
-          <div class="lb-col-headers" style="display:grid;grid-template-columns:40px 1fr 80px 80px 80px 100px;padding:10px 24px;border-bottom:1px solid var(--border)"><div class="lb-col-label">#</div><div class="lb-col-label">Participant</div><div class="lb-col-label" style="text-align:right">Score</div><div class="lb-col-label" style="text-align:right">Consensus</div><div class="lb-col-label" style="text-align:center">Streak</div><div class="lb-col-label" style="text-align:right">Reward</div></div>
+          <div style="display:grid;grid-template-columns:36px 1fr 72px 72px 60px 90px;padding:8px 16px;border-bottom:1px solid var(--border);gap:4px"><div class="lb-col-label">#</div><div class="lb-col-label">Participant</div><div class="lb-col-label" style="text-align:right">Score</div><div class="lb-col-label" style="text-align:right">Consensus</div><div class="lb-col-label" style="text-align:center">Streak</div><div class="lb-col-label" style="text-align:right">Reward</div></div>
           <div id="comp-lb-body"></div>
         </div>
       </div>
