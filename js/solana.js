@@ -61,8 +61,30 @@ async function sendTx(instructions) {
   const tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPubkey });
   tx.add(...instructions);
   const signed = await window.solana.signTransaction(tx);
-  const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false });
-  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  console.log('Sending tx…');
+  let sig;
+  try {
+    sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+  } catch(sendErr) {
+    // Attach logs to error for better debugging
+    if (sendErr.logs) sendErr.message += ' | logs: ' + sendErr.logs.join(' | ');
+    throw sendErr;
+  }
+  console.log('Tx sent:', sig);
+  const result = await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  if (result.value.err) {
+    const err = new Error('Transaction failed: ' + JSON.stringify(result.value.err));
+    // Fetch logs
+    try {
+      const txInfo = await connection.getTransaction(sig, { maxSupportedTransactionVersion: 0 });
+      err.logs = txInfo?.meta?.logMessages || [];
+      console.error('Tx logs:', err.logs);
+    } catch {}
+    throw err;
+  }
   return sig;
 }
 
@@ -114,12 +136,15 @@ async function txInitializeChallenge(cfg) {
   showToast('⏳','Deploying challenge…','Waiting for Phantom signature…');
 
   try {
-    const nameBytes = new TextEncoder().encode(cfg.name);
+    // PDA seed name capped at 32 bytes to stay within Solana seed limits
+    const nameRaw   = cfg.name.slice(0, 32);
+    const nameBytes = new TextEncoder().encode(nameRaw);
     const [challengePDA] = pda([
       new TextEncoder().encode('challenge'),
       walletPubkey.toBytes(),
       nameBytes,
     ]);
+    console.log('Challenge PDA:', challengePDA.toString(), 'name:', nameRaw);
 
     // Borsh: disc(8) + name_str(4+n) + duration_days(u16) + reward_top_n(u8) + vote_threshold(u8)
     const data = concat(
@@ -152,9 +177,23 @@ async function txInitializeChallenge(cfg) {
     return { pda: challengePDA.toString(), sig };
 
   } catch(e) {
-    console.error('initializeChallenge:', e);
-    const msg = e.message || String(e);
-    showToast('❌','Deploy failed', msg.includes('0x') ? 'Program error — check console' : msg.slice(0,80));
+    console.error('initializeChallenge full error:', e);
+    // Parse Solana program errors
+    let msg = e.message || String(e);
+    if (e.logs) {
+      console.error('Program logs:', e.logs);
+      const logMsg = e.logs.find(l => l.includes('Error') || l.includes('error'));
+      if (logMsg) msg = logMsg.replace('Program log: ','');
+    }
+    // Common fixes
+    if (msg.includes('already in use') || msg.includes('0x0')) {
+      msg = 'Challenge name already used — try a different name';
+    } else if (msg.includes('insufficient')) {
+      msg = 'Insufficient SOL for transaction fees';
+    } else if (msg.includes('0x')) {
+      msg = 'Program error: ' + msg.match(/0x[0-9a-f]+/i)?.[0] + ' — see console';
+    }
+    showToast('❌','Deploy failed', msg.slice(0,100));
     return null;
   }
 }
