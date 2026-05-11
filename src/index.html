@@ -773,15 +773,20 @@ input[type=range]::-webkit-slider-thumb {
     <h2>What gets measured?</h2>
     <p class="sub">Choose which signals feed the daily score. All data stays encrypted on-device — you only see aggregated scores.</p>
 
-    <div style="background:rgba(0,229,176,0.06);border:1px solid rgba(0,229,176,0.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:700;margin-bottom:4px">Connect Google Calendar</div>
-        <div style="font-size:12px;color:var(--muted)">Pull real meeting data — stays on your device, never sent to any server</div>
-        <div class="activity-chips" id="gcal-activity" style="margin-top:10px;margin-bottom:0"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:rgba(0,229,176,0.06);border:1px solid rgba(0,229,176,0.2);border-radius:12px;padding:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">📅 Google Calendar</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Meetings · events · real data</div>
+        <div class="activity-chips" id="gcal-activity" style="margin-bottom:10px;flex-wrap:wrap"></div>
+        <button class="btn btn-secondary" style="font-size:11px;padding:6px 14px;width:100%;justify-content:center" onclick="connectGoogleCalendar()">Connect</button>
       </div>
-      <button class="btn btn-secondary" style="font-size:12px;padding:8px 16px;flex-shrink:0" onclick="connectGoogleCalendar()">
-        &#x1F4C5; Connect Calendar
-      </button>
+      <div style="background:rgba(124,92,252,0.06);border:1px solid rgba(124,92,252,0.2);border-radius:12px;padding:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">🐙 GitHub</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Commits · PRs · code reviews</div>
+        <input id="github-username" type="text" placeholder="your GitHub username"
+          style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text);outline:none;margin-bottom:8px">
+        <button class="btn btn-secondary" style="font-size:11px;padding:6px 14px;width:100%;justify-content:center" onclick="connectGithub()">Connect</button>
+      </div>
     </div>
     <div class="metric-grid" id="metric-grid">
       <div class="metric-toggle on" onclick="toggleMetric(this)">
@@ -816,8 +821,8 @@ input[type=range]::-webkit-slider-thumb {
       </div>
       <div class="metric-toggle on" onclick="toggleMetric(this)">
         <div class="mt-icon">👥</div>
-        <div class="mt-text"><div class="mt-title">Peer consensus</div><div class="mt-sub">Anonymous daily vote</div></div>
-        <div class="toggle-pill"></div>
+        <div class="mt-text"><div class="mt-title">Peer consensus</div><div class="mt-sub">Always on — core of the protocol</div></div>
+        <div class="toggle-pill" style="background:var(--accent);pointer-events:none"></div>
       </div>
       <div class="metric-toggle" onclick="toggleMetric(this)">
         <div class="mt-icon">📊</div>
@@ -957,10 +962,11 @@ input[type=range]::-webkit-slider-thumb {
       <div class="nav-item" onclick="showPage('admin',this)"><span class="nav-icon">⚙️</span>Settings</div>
     </div>
 
+    <div style="margin-bottom:6px">
+      <button id="gcal-btn" class="btn btn-secondary" style="font-size:11px;padding:7px 14px;width:100%;justify-content:center;" onclick="handleGCalBtn()">&#x1F4C5; Calendar</button>
+    </div>
     <div style="margin-bottom:12px">
-      <button id="gcal-btn" class="btn btn-secondary" style="font-size:11px;padding:8px 14px;width:100%;justify-content:center;" onclick="handleGCalBtn()">
-        &#x1F4C5; Connect Calendar
-      </button>
+      <button id="github-btn" class="btn btn-secondary" style="font-size:11px;padding:7px 14px;width:100%;justify-content:center;" onclick="handleGithubBtn()">&#x1F419; GitHub</button>
     </div>
     <div class="sidebar-challenge">
       <div class="sc-title">Active challenge</div>
@@ -1155,8 +1161,9 @@ const cfg = {
   company: 'TD SYNNEX — AI/ML Team',
   employees: 10,
   duration: 30,
-  rewardN: 3,
+  rewardN: 1,
   reward: 1000,
+  token: 'USDC',
   voteThreshold: '4/5'
 };
 
@@ -1199,7 +1206,12 @@ function selectOpt(el, group, val) {
   if(group==='vote-t') cfg.voteThreshold = val==='50'?'3/5':val==='60'?'4/5':'5/5';
   if(group==='token') {
     cfg.token = val;
-    updateReward();
+    // Fetch fresh SOL price if switching to SOL
+    if(val === 'SOL' && typeof fetchSolPrice === 'function') {
+      fetchSolPrice().then(() => updateReward());
+    } else {
+      updateReward();
+    }
     const lbl = document.getElementById('escrow-token-label');
     if(lbl) lbl.textContent = val;
   }
@@ -1226,11 +1238,21 @@ function updateReward() {
   const showN = Math.min(n, pcts.length, 10);
   let html = '';
   for(let i=0;i<showN;i++){
-    const amt = Math.round(total * pcts[i] / 100);
+    const usdAmt = Math.round(total * pcts[i] / 100);
     const cls = i<3 ? classes[i] : '';
+    let displayAmt, displayToken, subLabel = '';
+    if (token === 'SOL' && typeof usdToSol === 'function') {
+      const solAmt = usdToSol(usdAmt);
+      displayAmt = solAmt || usdAmt.toLocaleString();
+      displayToken = 'SOL';
+      subLabel = solAmt ? ' <span style="font-size:10px;color:var(--muted)">≈ $'+usdAmt.toLocaleString()+' USD</span>' : '';
+    } else {
+      displayAmt = usdAmt.toLocaleString();
+      displayToken = token;
+    }
     html += `<div class="reward-row">
       <div class="reward-pos"><span class="medal">${medals[i]||'🏅'}</span><span class="reward-label">Place ${i+1}</span></div>
-      <span class="reward-amount ${cls}">${amt.toLocaleString()} ${token}</span>
+      <span class="reward-amount ${cls}">${displayAmt} ${displayToken}${subLabel}</span>
     </div>`;
   }
   const el = document.getElementById('reward-preview');
@@ -1372,308 +1394,68 @@ const VOTE_DATA = [
 ];
 
 function buildVoteCards() {
-  // Try to use real calendar data for the first card (own activity)
   const storedActivity = sessionStorage.getItem('today_activity');
   const myActivity = storedActivity ? JSON.parse(storedActivity) : null;
+  const myWallet   = typeof walletPubkey !== 'undefined' && walletPubkey
+    ? walletPubkey.toString() : null;
+
+  // Participants with display names (in real app pulled from on-chain profile)
+  const PARTICIPANTS = [
+    { addr:'3Fk9...aB7c', name:'Alice M.',    role:'Product Manager'   },
+    { addr:'9mPq...Xw2f', name:'Bruno S.',    role:'Frontend Dev'      },
+    { addr:'7xK3...mNp2', name:'You',         role:'AI/ML Lead', isYou:true },
+    { addr:'Bc4L...qR8e', name:'Diana L.',    role:'Data Analyst'      },
+    { addr:'5Zt7...hK1d', name:'Enrico V.',   role:'Backend Dev'       },
+  ];
 
   let html = '';
-  VOTE_DATA.forEach((v,i)=>{
-    const isOwn = i === 0 && myActivity; // first card = own activity from calendar
-    const meetings = isOwn ? myActivity.meetings : v.meetings;
-    const total    = isOwn ? myActivity.totalEvents : v.meetings + v.docs;
-    const source   = isOwn ? myActivity.source : 'estimated';
+  VOTE_DATA.forEach((v, i) => {
+    const participant = PARTICIPANTS[i] || { addr: v.addr, name: v.addr, role: '' };
+    const isOwn = participant.isYou || (myWallet && v.addr.startsWith(myWallet.slice(0,4)));
+
+    // Use calendar data for first card
+    const meetings = (i === 0 && myActivity) ? myActivity.meetings : v.meetings;
+    const total    = (i === 0 && myActivity) ? myActivity.totalEvents : v.meetings + v.docs;
+    const source   = (i === 0 && myActivity) ? myActivity.source : null;
+
     html += `
-    <div class="vote-card" id="vcard-${i}">
+    <div class="vote-card" id="vcard-${i}" style="${isOwn ? 'opacity:0.5;' : ''}">
       <div class="vote-card-header">
-        <div>
-          <div class="vote-wallet">${v.addr}${i===2?'<span class="wallet-you">you</span>':''}</div>
-          <div class="vote-day" style="margin-top:4px;font-size:12px;color:var(--muted)">Activity — Day 7 ${isOwn?'<span style=\'color:var(--accent2)\'>● live from '+source+'</span>':''}</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(124,92,252,0.2);border:1px solid rgba(124,92,252,0.3);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;font-family:var(--font-mono);color:var(--accent)">
+            ${participant.name.slice(0,1)}
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:700">${participant.name}${isOwn ? ' <span class="wallet-you">you</span>' : ''}</div>
+            <div style="font-size:11px;color:var(--muted)">${participant.role} · <span style="font-family:var(--font-mono)">${v.addr}</span></div>
+          </div>
         </div>
-        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">anonymous</div>
+        <div style="text-align:right">
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">anonymous</div>
+          <div style="font-size:10px;color:var(--muted)">Day 7</div>
+        </div>
       </div>
-      <div class="activity-chips">
+      <div class="activity-chips" style="margin:12px 0">
         <div class="chip">💬 Messages <span class="chip-val">${v.msgs}</span></div>
         <div class="chip">📅 Meetings <span class="chip-val">${meetings}</span></div>
-        <div class="chip">📄 Docs edited <span class="chip-val">${v.docs}</span></div>
+        <div class="chip">📄 Docs <span class="chip-val">${v.docs}</span></div>
         <div class="chip">📧 Emails <span class="chip-val">${v.emails}</span></div>
-        ${isOwn?'<div class="chip" style="border-color:rgba(0,229,176,0.4)">📆 Total events <span class="chip-val">'+total+'</span></div>':''}
+        ${source ? '<div class="chip" style="border-color:rgba(0,229,176,0.4);color:var(--accent2)">● live from '+source+'</div>' : ''}
       </div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Was this a productive day? Your vote is anonymous and wallet-signed on-chain.</p>
-      <div class="vote-actions">
-        <button class="vote-btn yes" onclick="castVote(${i},'yes')">👍 Yes, good day</button>
-        <button class="vote-btn no" onclick="castVote(${i},'no')">👎 Not really</button>
-        <button class="vote-btn skip" onclick="castVote(${i},'skip')">⏭ Skip</button>
-      </div>
+      ${isOwn
+        ? '<div class="voted-badge" style="color:var(--muted);font-size:13px">🚫 Cannot vote on your own activity</div>'
+        : `<p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+            Was this a productive day? Your identity stays hidden — only your wallet signature is recorded on-chain.
+           </p>
+           <div class="vote-actions">
+             <button class="vote-btn yes" onclick="castVote(${i},'yes')">👍 Yes, good day</button>
+             <button class="vote-btn no" onclick="castVote(${i},'no')">👎 Not really</button>
+             <button class="vote-btn skip" onclick="castVote(${i},'skip')">⏭ Skip</button>
+           </div>`
+      }
     </div>`;
   });
   document.getElementById('vote-cards').innerHTML = html;
 }
 
-async function castVote(i, verdict) {
-  const card = document.getElementById('vcard-'+i);
-  const commitPDA = VOTE_DATA[i] && VOTE_DATA[i].commitPDA;
-  if (verdict === 'skip') {
-    card.innerHTML = '<div class="voted-badge">⏭️ Skipped.</div>';
-    return;
-  }
-  if (walletPubkey && commitPDA && typeof txCastVote === 'function') {
-    card.innerHTML = '<div class="voted-badge">⏳ Signing in Phantom…</div>';
-    const sig = await txCastVote(commitPDA, verdict === 'yes');
-    if (sig) {
-      const icon = verdict === 'yes' ? '✅' : '❌';
-      card.innerHTML = `<div class="voted-badge">${icon} Vote on-chain. <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">tx: ${sig.slice(0,8)}…</span></div>`;
-      return;
-    }
-  }
-  const icon2 = verdict === 'yes' ? '✅' : '❌';
-  card.innerHTML = `<div class="voted-badge">${icon2} Vote committed. <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">tx: ${randomTx()}</span></div>`;
-  showToast('⛓️','Vote committed','Commit-reveal hash recorded on Solana.');
-}
 
-const BADGES_DATA = [
-  {icon:'🔥',name:'Hot streak',desc:'7 days in top 5',earned:true},
-  {icon:'🗳️',name:'Faithful voter',desc:'Voted 7 days straight',earned:true},
-  {icon:'👑',name:'Day king',desc:'#1 on the leaderboard',earned:false},
-  {icon:'⚡',name:'Flash master',desc:'Win on a 2× flash day',earned:false},
-  {icon:'🎖️',name:'Consensus king',desc:'95%+ consensus for 3 days',earned:false},
-  {icon:'🤝',name:'Team player',desc:'Vote every day for 2 weeks',earned:false},
-  {icon:'🏆',name:'Month champion',desc:'Finish top 3 at month end',earned:false},
-  {icon:'💎',name:'Diamond hands',desc:'Never miss a daily commit',earned:true},
-  {icon:'🕵️',name:'Anon legend',desc:'Win without revealing wallet',earned:false},
-  {icon:'🚀',name:'Early bird',desc:'First to submit day 1',earned:true},
-];
-
-function buildBadges() {
-  let html = '';
-  BADGES_DATA.forEach(b=>{
-    html += `<div class="badge-card ${b.earned?'earned':'locked'}">
-      <div class="badge-icon">${b.icon}</div>
-      <div class="badge-name">${b.name}</div>
-      <div class="badge-desc">${b.desc}</div>
-      ${b.earned?'<div class="badge-earned-label">✓ MINTED ON-CHAIN</div>':'<div class="badge-earned-label" style="color:var(--muted)">LOCKED</div>'}
-    </div>`;
-  });
-  document.getElementById('badges-grid').innerHTML = html;
-}
-
-function buildMiniChart() {
-  const vals = [45,62,38,71,58,80,65,72,55,68,74,61,88,95];
-  const max = Math.max(...vals);
-  let html = '';
-  vals.forEach((v,i)=>{
-    const h = Math.round((v/max)*60);
-    html += `<div class="bar${i===vals.length-1?' today':''}" style="height:${h}px" title="Day ${i+1}: ${v}pts"></div>`;
-  });
-  document.getElementById('mini-chart').innerHTML = html;
-}
-
-const TX_DATA = [
-  {type:'Daily commit',wallet:'3Fk9...aB7c',time:'2 min ago'},
-  {type:'Vote cast',wallet:'7xK3...mNp2',time:'5 min ago'},
-  {type:'Daily commit',wallet:'7xK3...mNp2',time:'18 min ago'},
-  {type:'Daily commit',wallet:'9mPq...Xw2f',time:'24 min ago'},
-  {type:'Badge minted',wallet:'3Fk9...aB7c',time:'1h ago'},
-];
-
-function buildTxLog() {
-  let html = '';
-  TX_DATA.forEach(t=>{
-    html += `<div class="chain-row">
-      <div class="chain-label">${t.type} · <span style="font-family:var(--font-mono);font-size:11px">${t.wallet}</span></div>
-      <div class="chain-val" style="font-size:11px;color:var(--muted)">${t.time}</div>
-    </div>`;
-  });
-  document.getElementById('tx-log').innerHTML = html;
-}
-
-function buildAdminCfg() {
-  const durStr = cfg.duration<30?cfg.duration+' days':cfg.duration==30?'1 month':Math.round(cfg.duration/7)+' weeks';
-  document.getElementById('admin-cfg-display').innerHTML = `
-    <div class="chain-row"><div class="chain-label">Challenge name</div><div class="chain-val">${cfg.name}</div></div>
-    <div class="chain-row"><div class="chain-label">Participants</div><div class="chain-val">${cfg.employees} employees</div></div>
-    <div class="chain-row"><div class="chain-label">Duration</div><div class="chain-val">${durStr}</div></div>
-    <div class="chain-row"><div class="chain-label">Reward pool</div><div class="chain-val">$${cfg.reward.toLocaleString()} USDC</div></div>
-    <div class="chain-row"><div class="chain-label">Top rewarded</div><div class="chain-val">Top ${cfg.rewardN}</div></div>
-    <div class="chain-row"><div class="chain-label">Vote threshold</div><div class="chain-val">${cfg.voteThreshold} peers agree</div></div>
-    <div class="chain-row"><div class="chain-label">Raw data access</div><div class="chain-val" style="color:var(--accent3)">❌ Not available</div></div>
-  `;
-}
-
-// ═══════════════════════════════════════════════
-// NAV
-// ═══════════════════════════════════════════════
-function showPage(name, navEl) {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  if(navEl) navEl.classList.add('active');
-}
-
-// ═══════════════════════════════════════════════
-// TOAST
-// ═══════════════════════════════════════════════
-function showToast(icon,title,body) {
-  const t = document.getElementById('toast');
-  document.getElementById('toast-icon').textContent = icon;
-  document.getElementById('toast-title').textContent = title;
-  document.getElementById('toast-body').textContent = body;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 4000);
-}
-
-function randomTx() {
-  const chars='0123456789abcdef';
-  return Array(8).fill(0).map(()=>chars[Math.floor(Math.random()*chars.length)]).join('')+'...';
-}
-
-// ═══════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════
-updateReward();
-
-// Animate sidebar timer
-let remaining = 23*24*60*60 + 14*3600;
-setInterval(()=>{
-  remaining--;
-  const d = Math.floor(remaining/86400);
-  const h = Math.floor((remaining%86400)/3600);
-  const el = document.getElementById('sb-timer');
-  if(el) el.textContent = d+'d '+h+'h';
-},1000);
-
-// Wallet button toggle
-function handleWalletBtn() {
-  // walletPubkey lives in solana.js — check via DOM state
-  const btn = document.getElementById('wallet-btn');
-  const isConnected = btn && btn.style.color === 'var(--accent2)';
-
-  if (isConnected) {
-    if (typeof disconnectPhantom === 'function') disconnectPhantom();
-  } else {
-    if (typeof connectPhantom !== 'function') {
-      showToast('❌','Phantom not loaded','Refresh the page');
-      return;
-    }
-    connectPhantom().then(pk => {
-      if (!pk) return;
-      // Update wizard CTA if visible
-      const cta = document.getElementById('wallet-cta-status');
-      if (cta) cta.textContent = 'Connected: ' + pk.toString().slice(0,12) + '...';
-      const ctaBox = document.getElementById('wallet-cta');
-      if (ctaBox) ctaBox.style.borderColor = 'rgba(0,229,176,0.4)';
-      // Refresh leaderboard
-      const challengePDA = sessionStorage.getItem('challengePDA');
-      if (challengePDA && typeof fetchLeaderboard === 'function') {
-        fetchLeaderboard(challengePDA).then(() => {
-          if (typeof buildLeaderboard === 'function') buildLeaderboard();
-        });
-      }
-    });
-  }
-}
-
-// Override launch() to also call txInitializeChallenge
-const _origLaunch = launch;
-window.launch = async function() {
-  // REQUIRE wallet connection — no simulated deploys
-  if (!walletPubkey) {
-    showToast('⚠️','Connect Phantom first','You must connect your wallet to deploy on-chain');
-    // Flash the connect button
-    const cta = document.getElementById('wallet-cta');
-    if (cta) { cta.style.borderColor='var(--accent3)'; setTimeout(()=>cta.style.borderColor='',2000); }
-    return;
-  }
-
-  const btn = document.getElementById('launch-btn');
-  btn.textContent = '⏳ Waiting for signature…';
-  btn.disabled = true;
-
-  const result = await txInitializeChallenge({
-    name:          cfg.name,
-    durationDays:  cfg.duration,
-    rewardTopN:    cfg.rewardN,
-    voteThreshold: parseInt(cfg.voteThreshold),
-  });
-
-  if (!result) {
-    // tx failed — re-enable button
-    btn.textContent = '🚀 Deploy challenge';
-    btn.disabled = false;
-    return;
-  }
-
-  // Success — show dashboard
-  btn.textContent = '✅ Deployed!';
-  setTimeout(()=>{
-    initDashboard();
-    document.getElementById('screen-setup').classList.remove('active');
-    document.getElementById('screen-dashboard').classList.add('active');
-    showToast('🚀','Challenge on-chain!','Program: J8ff2KX2 · leaderboard is live');
-  }, 1200);
-};
-</script>
-<script>
-// ─── ON-CHAIN ACTION HANDLERS ──────────────────────────────
-function handleGCalBtn() {
-  const btn = document.getElementById('gcal-btn');
-  if (!btn) return;
-  if (typeof connectGoogleCalendar === 'function') {
-    connectGoogleCalendar();
-  } else {
-    showToast('❌','Google API not ready','Refresh the page');
-  }
-}
-
-// Override fetchCalendarActivity to also update vote cards
-const _origFetchCal = window.fetchCalendarActivity;
-window._calendarConnected = false;
-
-async function handleRegister() {
-  if (!walletPubkey) {
-    showToast('⚠️', 'Connect wallet first', 'Click Connect Phantom in the sidebar');
-    return;
-  }
-  const result = await txRegisterParticipant();
-  if (result) {
-    showPage('leaderboard', document.querySelector('[onclick*="leaderboard"]'));
-    buildLeaderboard();
-  }
-}
-
-async function handleCommitScore() {
-  if (!walletPubkey) {
-    showToast('⚠️', 'Connect Phantom first', '');
-    return;
-  }
-  // Use real calendar score if available, otherwise compute from mock
-  const realScore = sessionStorage.getItem('today_computed_score');
-  const score = realScore ? parseInt(realScore) : Math.round(80 + Math.random() * 120);
-  const source = realScore ? 'Google Calendar' : 'estimated';
-
-  // Day = elapsed days since challenge start (use sessionStorage or default to 0)
-  const challengePDA = sessionStorage.getItem('challengePDA');
-  const day = 0; // Day 0 for demo — in production: Math.floor((Date.now()/1000 - startTime) / 86400)
-
-  showToast('⏳', 'Committing score…', source + ' · ' + score + ' pts · signing in Phantom');
-  const result = await txCommitDailyScore(score, day);
-  if (result) {
-    showToast('✅', 'Score committed on-chain!', 'Day ' + day + ' · ' + score + ' pts · ' + source);
-  }
-}
-
-// Refresh leaderboard from chain periodically when on leaderboard tab
-let _lbRefreshInterval = null;
-function startLeaderboardRefresh() {
-  if (_lbRefreshInterval) clearInterval(_lbRefreshInterval);
-  _lbRefreshInterval = setInterval(async () => {
-    const pda = sessionStorage.getItem('challengePDA');
-    if (pda && walletPubkey) {
-      const data = await fetchLeaderboard(pda);
-      if (data && data.length) buildLeaderboard(data);
-    }
-  }, 15000); // refresh every 15s
-}
-
-</script>
-</body>
-</html>
