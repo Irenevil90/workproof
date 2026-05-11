@@ -7,7 +7,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script src="js/solana.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// Phantom availability check — retry until extension injects window.solana
+window._phantomCheckInterval = setInterval(() => {
+  if (window.solana?.isPhantom) {
+    clearInterval(window._phantomCheckInterval);
+    const dot = document.getElementById('chain-status-dot');
+    const lbl = document.getElementById('chain-status-label');
+    if (lbl && lbl.textContent === 'Disconnected') {
+      if (lbl) lbl.textContent = 'Phantom detected';
+    }
+  }
+}, 500);
+</script>
 <style>
 :root {
   --bg: #0a0a0f;
@@ -701,10 +715,10 @@ input[type=range]::-webkit-slider-thumb {
     <div class="field-group">
       <label class="field-label">Number of employees</label>
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
-        <input type="number" id="cfg-employees-num" min="3" max="200" value="10"
+        <input type="number" id="cfg-employees-num" min="3" max="50" value="10"
           style="width:90px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:16px;color:var(--text);outline:none;"
-          oninput="var v=Math.min(200,Math.max(3,+this.value||10));document.getElementById('cfg-employees').value=Math.min(50,v);document.getElementById('sv-employees').textContent=v;updateReward()">
-        <span style="font-size:13px;color:var(--muted)">participants (3–200+)</span>
+          oninput="var v=Math.min(50,Math.max(3,+this.value||10));document.getElementById('cfg-employees').value=Math.min(50,v);document.getElementById('sv-employees').textContent=v;updateReward()">
+        <span style="font-size:13px;color:var(--muted)">participants (3–50)</span>
       </div>
       <div class="slider-wrap">
         <span class="slider-val" id="sv-employees" style="position:static;right:auto;top:auto;font-size:11px;color:var(--muted)">or use slider (3–50)</span>
@@ -713,10 +727,27 @@ input[type=range]::-webkit-slider-thumb {
     </div>
 
     <div class="field-group">
-      <label class="field-label">Challenge duration <span class="slider-val" id="sv-duration">30 days</span></label>
-      <div class="slider-wrap">
-        <input type="range" id="cfg-duration" min="7" max="90" value="30"
-          oninput="let v=+this.value; document.getElementById('sv-duration').textContent=v<30?v+' days':v==30?'1 month':Math.round(v/7)+' weeks'">
+      <label class="field-label">Challenge duration</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+        <div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:8px">Start date</div>
+          <input type="date" id="cfg-start-date"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:13px;color:var(--text);outline:none;color-scheme:dark;"
+            oninput="calcDuration()">
+        </div>
+        <div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:8px">End date</div>
+          <input type="date" id="cfg-end-date"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:var(--font-mono);font-size:13px;color:var(--text);outline:none;color-scheme:dark;"
+            oninput="calcDuration()">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">or set days directly:</span>
+        <input type="number" id="cfg-duration" min="7" max="90" value="30"
+          style="width:80px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-family:var(--font-mono);font-size:14px;color:var(--accent2);outline:none;"
+          oninput="updateDurationFromDays(+this.value)">
+        <span id="sv-duration" style="font-family:var(--font-mono);font-size:12px;color:var(--accent2)">30 days</span>
       </div>
     </div>
 
@@ -1453,14 +1484,29 @@ setInterval(()=>{
 
 // Wallet button toggle
 function handleWalletBtn() {
-  if (walletPubkey) {
-    disconnectPhantom();
+  // walletPubkey lives in solana.js — check via DOM state
+  const btn = document.getElementById('wallet-btn');
+  const isConnected = btn && btn.style.color === 'var(--accent2)';
+
+  if (isConnected) {
+    if (typeof disconnectPhantom === 'function') disconnectPhantom();
   } else {
+    if (typeof connectPhantom !== 'function') {
+      showToast('❌','Phantom not loaded','Refresh the page');
+      return;
+    }
     connectPhantom().then(pk => {
-      if (pk && typeof fetchLeaderboard === 'function') {
-        const pda = sessionStorage.getItem('challengePDA');
-        if (pda) fetchLeaderboard(pda).then(data => {
-          if (data.length) buildLeaderboard(); // refresh with wallet highlighted
+      if (!pk) return;
+      // Update wizard CTA if visible
+      const cta = document.getElementById('wallet-cta-status');
+      if (cta) cta.textContent = 'Connected: ' + pk.toString().slice(0,12) + '...';
+      const ctaBox = document.getElementById('wallet-cta');
+      if (ctaBox) ctaBox.style.borderColor = 'rgba(0,229,176,0.4)';
+      // Refresh leaderboard
+      const challengePDA = sessionStorage.getItem('challengePDA');
+      if (challengePDA && typeof fetchLeaderboard === 'function') {
+        fetchLeaderboard(challengePDA).then(() => {
+          if (typeof buildLeaderboard === 'function') buildLeaderboard();
         });
       }
     });
@@ -1470,29 +1516,44 @@ function handleWalletBtn() {
 // Override launch() to also call txInitializeChallenge
 const _origLaunch = launch;
 window.launch = async function() {
-  const btn = document.getElementById('launch-btn');
-  btn.textContent = '⏳ Deploying...';
-  btn.disabled = true;
-
-  // Try on-chain deploy if wallet connected
-  if (walletPubkey) {
-    await txInitializeChallenge({
-      name:          cfg.name,
-      durationDays:  cfg.duration,
-      rewardTopN:    cfg.rewardN,
-      voteThreshold: parseInt(cfg.voteThreshold),
-    });
+  // REQUIRE wallet connection — no simulated deploys
+  if (!walletPubkey) {
+    showToast('⚠️','Connect Phantom first','You must connect your wallet to deploy on-chain');
+    // Flash the connect button
+    const cta = document.getElementById('wallet-cta');
+    if (cta) { cta.style.borderColor='var(--accent3)'; setTimeout(()=>cta.style.borderColor='',2000); }
+    return;
   }
 
+  const btn = document.getElementById('launch-btn');
+  btn.textContent = '⏳ Waiting for signature…';
+  btn.disabled = true;
+
+  const result = await txInitializeChallenge({
+    name:          cfg.name,
+    durationDays:  cfg.duration,
+    rewardTopN:    cfg.rewardN,
+    voteThreshold: parseInt(cfg.voteThreshold),
+  });
+
+  if (!result) {
+    // tx failed — re-enable button
+    btn.textContent = '🚀 Deploy challenge';
+    btn.disabled = false;
+    return;
+  }
+
+  // Success — show dashboard
+  btn.textContent = '✅ Deployed!';
   setTimeout(()=>{
     initDashboard();
     document.getElementById('screen-setup').classList.remove('active');
     document.getElementById('screen-dashboard').classList.add('active');
-    showToast('🚀','Challenge deployed!','Smart contract live on Solana devnet. Leaderboard is now active.');
-  }, walletPubkey ? 2500 : 1800);
+    showToast('🚀','Challenge on-chain!','Program: J8ff2KX2 · leaderboard is live');
+  }, 1200);
 };
 </script>
-<script src="js/solana.js">
+<script>
 // ─── ON-CHAIN ACTION HANDLERS ──────────────────────────────
 async function handleRegister() {
   if (!walletPubkey) {
