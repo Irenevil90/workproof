@@ -1,7 +1,14 @@
+# Build artifacts
 dist/
-node_modules/
+chain/target/
 .gh-pages-tmp/
+
+# Node
+node_modules/
+
+# Mac
 .DS_Store
+
+# Secrets
 *.env
 .env.*
-chain/target/
