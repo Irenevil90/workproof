@@ -1556,8 +1556,37 @@ setInterval(()=>{
 },1000);
 
 // COMPETITOR FLOW FUNCTIONS
-var MOCK_CHALLENGES=[{pda:'CPzCYg4ZiXMZwxJS5f6jBGKePZXfLUeV5guSVSDZdW8E',name:'Q2 Innovation Sprint',company:'TD SYNNEX',participants:8,maxParticipants:50,daysLeft:23,totalDays:30,reward:'1,000 USDC',token:'USDC',topN:3,active:true},{pda:'DemoChallenge2XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',name:'Colosseum Frontier Sprint',company:'Solana Foundation',participants:24,maxParticipants:50,daysLeft:12,totalDays:30,reward:'5,000 USDC',token:'USDC',topN:5,active:true}];
-var COMP_PARTICIPANTS=[{addr:'3Fk9...aB7c',name:'Alice M.',role:'Product Manager',score:1240,consensus:94,streak:7},{addr:'9mPq...Xw2f',name:'Bruno S.',role:'Frontend Dev',score:1180,consensus:91,streak:7},{addr:'Bc4L...qR8e',name:'Diana L.',role:'Data Analyst',score:720,consensus:82,streak:5},{addr:'5Zt7...hK1d',name:'Enrico V.',role:'Backend Dev',score:698,consensus:79,streak:6},{addr:'Kp2M...yV5n',name:'Fatima R.',role:'QA Engineer',score:634,consensus:85,streak:4},{addr:'8rNs...oW3j',name:'Giorgio B.',role:'DevOps',score:601,consensus:76,streak:3},{addr:'2Jw6...cD4p',name:'Hannah K.',role:'Designer',score:544,consensus:72,streak:7},{addr:'Hf1B...tL9a',name:'Ivan C.',role:'Data Engineer',score:499,consensus:68,streak:2}];
+// Clear stale live_challenges on page refresh
+(function(){try{sessionStorage.removeItem('live_challenges');}catch(e){}})();
+
+var MOCK_CHALLENGES=[{
+  pda:'WorkProofDemo1111111111111111111111111111111',
+  name:'Colosseum Frontier Challenge',
+  company:'Solana Foundation · Open to all',
+  participants:12,
+  maxParticipants:50,
+  daysLeft:18,
+  totalDays:30,
+  reward:'5,000 USDC',
+  token:'USDC',
+  topN:3,
+  active:true,
+  isOwn:false,
+}];
+var COMP_PARTICIPANTS=[
+  {addr:'3Fk9...aB7c',name:'Alice M.',    role:'Product Manager',   score:1240,consensus:94,streak:7},
+  {addr:'9mPq...Xw2f',name:'Bruno S.',    role:'Frontend Dev',      score:1180,consensus:91,streak:7},
+  {addr:'Bc4L...qR8e',name:'Diana L.',    role:'Data Analyst',      score:920, consensus:88,streak:6},
+  {addr:'5Zt7...hK1d',name:'Enrico V.',   role:'Backend Dev',       score:870, consensus:79,streak:6},
+  {addr:'Kp2M...yV5n',name:'Fatima R.',   role:'QA Engineer',       score:810, consensus:85,streak:5},
+  {addr:'8rNs...oW3j',name:'Giorgio B.',  role:'DevOps',            score:760, consensus:76,streak:5},
+  {addr:'2Jw6...cD4p',name:'Hannah K.',   role:'Designer',          score:720, consensus:82,streak:4},
+  {addr:'Hf1B...tL9a',name:'Ivan C.',     role:'Data Engineer',     score:680, consensus:74,streak:3},
+  {addr:'4eQv...sM0k',name:'Julia T.',    role:'ML Engineer',       score:640, consensus:80,streak:4},
+  {addr:'Mn3P...wQ9r',name:'Karl B.',     role:'Tech Lead',         score:590, consensus:71,streak:3},
+  {addr:'Xr7T...jK2s',name:'Laura M.',    role:'Scrum Master',      score:540, consensus:78,streak:2},
+  {addr:'Pz8Y...vN4t',name:'Marco G.',    role:'Cloud Architect',   score:490, consensus:69,streak:2},
+];
 var compProfile=JSON.parse(sessionStorage.getItem('comp_profile')||'null');
 var compChallenge=JSON.parse(sessionStorage.getItem('comp_challenge')||'null');
 var compJoined=sessionStorage.getItem('comp_joined')==='true';
@@ -1601,6 +1630,23 @@ function updateLandingWallet(){
   if(hdrBtn&&pk){hdrBtn.textContent='👻 '+pk.toString().slice(0,6)+'...';hdrBtn.style.color='var(--accent2)';}
 }
 
+
+function connectWalletForBrowser(){
+  connectPhantom().then(function(pk){
+    if(!pk) return;
+    var btn=document.getElementById('comp-header-wallet');
+    if(btn){
+      btn.textContent='👻 '+pk.toString().slice(0,4)+'…'+pk.toString().slice(-4);
+      btn.style.color='var(--accent2)';
+      btn.style.borderColor='rgba(0,229,176,0.4)';
+      btn.onclick=null; // already connected
+    }
+    // Rebuild list now that wallet is known
+    buildChallengeList();
+    showToast('✅','Wallet connected','You can now see your challenges and join new ones');
+  });
+}
+
 function buildChallengeList(){
   var el=document.getElementById('challenge-list');if(!el)return;
   // Merge mock challenges with any live ones created via admin
@@ -1622,7 +1668,7 @@ function buildChallengeList(){
     var isJoined=ch.pda===joinedPDA2;
     var border=isJoined?'border-color:rgba(0,229,176,.5)':isOwn?'border-color:rgba(124,92,252,.5)':'';
     var badge=isJoined?'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.12);color:var(--accent2);font-family:var(--font-mono);font-size:10px;font-weight:700">✓ JOINED</span>':isOwn?'<span style="padding:3px 10px;border-radius:20px;background:rgba(124,92,252,.12);color:var(--accent);font-family:var(--font-mono);font-size:10px;font-weight:700">👑 YOURS</span>':'<span style="padding:3px 10px;border-radius:20px;background:rgba(0,229,176,.08);color:var(--accent2);font-family:var(--font-mono);font-size:10px">● Active</span>';
-    var chJson=encodeURIComponent(JSON.stringify(ch));var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="openChallengeDashboard(\''+ch.pda+'\');">Open dashboard →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\')">Join challenge →</button>';
+    var chJson=encodeURIComponent(JSON.stringify(ch));var walletConnected=!!_connectedWallet();var actionBtn=isJoined?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="openChallengeDashboard(\''+ch.pda+'\');">Open dashboard →</button>':walletConnected?'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px" onclick="joinChallenge(\''+ch.pda+'\');">Join challenge →</button>':'<button class="btn btn-primary" style="font-size:13px;padding:10px 24px;opacity:0.5" onclick="connectWalletForBrowser()">Connect wallet first</button>';
     return'<div class="challenge-card" style="'+border+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'+
         '<div><div class="cc-name">'+ch.name+'</div><div class="cc-company" style="margin-top:3px">'+ch.company+'</div></div>'+
@@ -1646,7 +1692,31 @@ function buildChallengeList(){
 
 function joinChallenge(pda){if(!_connectedWallet()){showToast('⚠️','Connect Phantom first','');connectPhantom().then(function(pk){if(pk)joinChallenge(pda);});return;}var modal=document.getElementById('profile-modal');if(modal){modal.style.display='flex';modal.dataset.pda=pda;}}
 
-function confirmRegister(){var fn=document.getElementById('reg-firstname');var ln=document.getElementById('reg-lastname');var modal=document.getElementById('profile-modal');if(!fn||!fn.value.trim()){if(fn)fn.style.borderColor='var(--accent3)';return;}var pda=modal?modal.dataset.pda:'';if(modal)modal.style.display='none';compProfile={firstname:fn.value.trim(),lastname:ln?ln.value.trim():'',displayName:fn.value.trim()+(ln&&ln.value.trim()?' '+ln.value.trim():'')};sessionStorage.setItem('comp_profile',JSON.stringify(compProfile));showToast('⏳','Registering on-chain…','Sign in Phantom');sessionStorage.setItem('challengePDA',pda);if(typeof txRegisterParticipant==='function')txRegisterParticipant().then(function(){});var ch=MOCK_CHALLENGES.find(function(c){return c.pda===pda;})||MOCK_CHALLENGES[0];compChallenge=ch;compJoined=true;sessionStorage.setItem('comp_joined','true');sessionStorage.setItem('comp_challenge',JSON.stringify(ch));showCompDashboard();showToast('✅','Welcome, '+compProfile.displayName+'!','You are in the challenge. Good luck!');}
+async function confirmRegister(){
+  var fn=document.getElementById('reg-firstname');
+  var ln=document.getElementById('reg-lastname');
+  var modal=document.getElementById('profile-modal');
+  if(!fn||!fn.value.trim()){if(fn)fn.style.borderColor='var(--accent3)';return;}
+  var pda=modal?modal.dataset.pda:'';
+  if(modal)modal.style.display='none';
+  compProfile={firstname:fn.value.trim(),lastname:ln?ln.value.trim():'',displayName:fn.value.trim()+(ln&&ln.value.trim()?' '+ln.value.trim():'')};
+  sessionStorage.setItem('comp_profile',JSON.stringify(compProfile));
+  var allCh=MOCK_CHALLENGES.concat(JSON.parse(sessionStorage.getItem('live_challenges')||'[]'));
+  var ch=allCh.find(function(c){return c.pda===pda;})||MOCK_CHALLENGES[0];
+  var isRealChallenge=pda&&pda.length>30&&pda.indexOf('Demo')<0&&pda.indexOf('WorkProof')<0;
+  sessionStorage.setItem('challengePDA',pda);
+  if(isRealChallenge&&typeof txRegisterParticipant==='function'){
+    showToast('⏳','Registering on-chain…','Sign in Phantom');
+    try{await txRegisterParticipant();showToast('✅','Registered on-chain!','Transaction confirmed');}
+    catch(e){showToast('ℹ️','Joining in demo mode','On-chain tx skipped');}
+  } else {
+    showToast('✅','Joined!','Welcome '+compProfile.displayName+'!');
+  }
+  compChallenge=ch;compJoined=true;
+  sessionStorage.setItem('comp_joined','true');
+  sessionStorage.setItem('comp_challenge',JSON.stringify(ch));
+  showCompDashboard();
+}
 
 function showCompDashboard(){var b=document.getElementById('comp-browser');var d=document.getElementById('comp-dashboard');if(b)b.style.display='none';if(d)d.style.display='flex';var ch=compChallenge||MOCK_CHALLENGES[0];['comp-challenge-name','comp-stat-participants','comp-stat-reward','comp-my-rank'].forEach(function(id,i){var el=document.getElementById(id);if(el)el.textContent=[ch.name,ch.participants,ch.reward,'#3'][i];});buildCompLeaderboard();buildCompVoteCards();updatePowDisplay();updateCompProfilePage();startCompTimer();}
 
@@ -1775,9 +1845,9 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
       <button class="btn btn-secondary" style="padding:8px 14px;font-size:12px;flex-shrink:0" onclick="goLanding()">← Back</button>
       <div style="flex:1">
         <div style="font-size:22px;font-weight:800" data-i18n="Open challenges">Open challenges</div>
-        <div style="font-size:13px;color:var(--muted)">Browse and join · wallet requested only when joining</div>
+        <div style="font-size:13px;color:var(--muted)">Connect wallet to see your challenges and join new ones</div>
       </div>
-      <button class="btn btn-secondary" style="font-size:11px;padding:7px 14px;flex-shrink:0" id="comp-header-wallet" onclick="connectPhantom().then(function(pk){if(pk)updateCompWalletUI();})">👻 Connect Phantom</button>
+      <button id="comp-header-wallet" class="btn btn-secondary" style="font-size:12px;padding:8px 16px;flex-shrink:0;white-space:nowrap" onclick="connectWalletForBrowser()">👻 Connect Phantom</button>
     </div>
     <div id="comp-wallet-prompt" style="display:none"></div>
     <div id="challenge-list"></div>
