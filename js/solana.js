@@ -288,7 +288,7 @@ async function txCastVote(commitPDAStr, verdict) {
 }
 
 // ─── GOOGLE CALENDAR INTEGRATION ───────────────────────────
-const GCAL_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID'; // set in settings
+const GCAL_CLIENT_ID = '66127663594-3dk1gr1c9cnnj96mmhl7jkolkk7hjd0u.apps.googleusercontent.com'; // set in settings
 const GCAL_SCOPES    = 'https://www.googleapis.com/auth/calendar.readonly';
 
 function connectGoogleCalendar() {
@@ -342,18 +342,32 @@ async function fetchCalendarActivity() {
 
 function updateActivityDisplay(activity) {
   if (!activity) return;
+
+  // Update wizard step 3 chips (if still in setup)
   const el = document.getElementById('gcal-activity');
   if (el) {
-    el.innerHTML = `
-      <div class="chip">📅 Meetings <span class="chip-val">${activity.meetings}</span></div>
-      <div class="chip">📆 Total events <span class="chip-val">${activity.totalEvents}</span></div>
-      <div class="chip" style="color:var(--accent2)">✓ ${activity.source}</div>
-    `;
+    el.innerHTML =
+      '<div class="chip">📅 Meetings <span class="chip-val">'+activity.meetings+'</span></div>' +
+      '<div class="chip">📆 Total events <span class="chip-val">'+activity.totalEvents+'</span></div>' +
+      '<div class="chip" style="border-color:rgba(0,229,176,0.4);color:var(--accent2)">✓ '+activity.source+'</div>';
   }
-  // Auto-use calendar data for score if committing
-  const storedScore = Math.round(activity.meetings * 25 + activity.totalEvents * 10 + Math.random() * 20);
-  sessionStorage.setItem('today_computed_score', storedScore.toString());
-  showToast('📅', `${activity.meetings} meetings today`, `Score: ${storedScore} pts — ready to commit`);
+
+  // Update sidebar button
+  const btn = document.getElementById('gcal-btn');
+  if (btn) {
+    btn.textContent = '📅 ' + activity.meetings + ' meetings today';
+    btn.style.color = 'var(--accent2)';
+    btn.style.borderColor = 'rgba(0,229,176,0.4)';
+  }
+
+  // Rebuild vote cards with live data
+  if (typeof buildVoteCards === 'function') buildVoteCards();
+
+  // Compute score from real data
+  const score = Math.round(activity.meetings * 25 + activity.totalEvents * 10 + Math.random() * 20);
+  sessionStorage.setItem('today_computed_score', score.toString());
+  showToast('📅', activity.meetings + ' meetings today',
+    'Score: ' + score + ' pts — ready to commit on-chain');
 }
 
 // ─── LEADERBOARD FROM CHAIN ────────────────────────────────
