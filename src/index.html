@@ -906,10 +906,10 @@ input[type=range]::-webkit-slider-thumb {
     </div>
 
     <div class="sidebar-challenge">
-      <div class="sc-title">Active challenge</div>
+      <div class="sc-title" data-i18n="Active challenge">Active challenge</div>
       <div class="sc-name" id="sb-name">Q2 Innovation Sprint</div>
       <div class="sc-timer" id="sb-timer">23d 14h</div>
-      <div class="sc-timer-label">remaining</div>
+      <div class="sc-timer-label" data-i18n="remaining">remaining</div>
       <div class="progress-bar"><div class="progress-fill" id="sb-progress" style="width:23%"></div></div>
     </div>
   </div>
@@ -1567,6 +1567,23 @@ setInterval(()=>{
 },1000);
 
 // COMPETITOR FLOW FUNCTIONS
+// ── DEMO RESET: clear stale session data on fresh load ──
+(function(){
+  // Only clear if not in an active session (no nav happening)
+  if(!sessionStorage.getItem('_session_active')){
+    sessionStorage.removeItem('live_challenges');
+    sessionStorage.removeItem('comp_joined');
+    sessionStorage.removeItem('comp_challenge');
+    sessionStorage.removeItem('challengePDA');
+    sessionStorage.removeItem('participantPDA');
+    sessionStorage.removeItem('pow_history');
+    sessionStorage.removeItem('pow_last_submit');
+    // Clear votes
+    Object.keys(sessionStorage).filter(function(k){return k.startsWith('voted_');}).forEach(function(k){sessionStorage.removeItem(k);});
+  }
+  sessionStorage.setItem('_session_active','1');
+})();
+
 var MOCK_CHALLENGES=[{
   pda:'WorkProofDemo1111111111111111111111111111111',
   name:'Colosseum Frontier Challenge',
@@ -1717,20 +1734,42 @@ async function confirmRegister(){
   if(!fn||!fn.value.trim()){if(fn)fn.style.borderColor='var(--accent3)';return;}
   var pda=modal?modal.dataset.pda:'';
   if(modal)modal.style.display='none';
-  compProfile={firstname:fn.value.trim(),lastname:ln?ln.value.trim():'',displayName:fn.value.trim()+(ln&&ln.value.trim()?' '+ln.value.trim():'')};
+
+  compProfile={
+    firstname:fn.value.trim(),
+    lastname:ln?ln.value.trim():'',
+    displayName:fn.value.trim()+(ln&&ln.value.trim()?' '+ln.value.trim():'')
+  };
   sessionStorage.setItem('comp_profile',JSON.stringify(compProfile));
+
   var allCh=MOCK_CHALLENGES.concat(JSON.parse(sessionStorage.getItem('live_challenges')||'[]'));
-  var ch=allCh.find(function(c){return c.pda===pda;})||MOCK_CHALLENGES[0];
-  var isRealChallenge=pda&&pda.length>30&&pda.indexOf('Demo')<0&&pda.indexOf('WorkProof')<0;
+  var ch=allCh.find(function(x){return x.pda===pda;})||MOCK_CHALLENGES[0];
+  
+  // Determine if this is a real on-chain challenge
+  var isReal=pda&&pda.length>30&&pda.indexOf('Demo')<0&&pda.indexOf('WorkProof')<0&&pda.indexOf('Live-')<0;
   sessionStorage.setItem('challengePDA',pda);
-  if(isRealChallenge&&typeof txRegisterParticipant==='function'){
-    showToast('⏳','Registering on-chain…','Sign in Phantom');
-    try{await txRegisterParticipant();showToast('✅','Registered on-chain!','Transaction confirmed');}
-    catch(e){showToast('ℹ️','Joining in demo mode','On-chain tx skipped');}
-  } else {
-    showToast('✅','Joined!','Welcome '+compProfile.displayName+'!');
+  sessionStorage.setItem('_session_active','1');
+
+  if(isReal&&typeof txRegisterParticipant==='function'){
+    showToast('⏳','Signing registration…','Phantom will open');
+    try{
+      var result=await txRegisterParticipant();
+      if(result){
+        showToast('✅','Registered on Solana devnet!',
+          'Wallet: '+compProfile.displayName+' · tx signed');
+      }
+    }catch(e){
+      showToast('ℹ️','Demo mode — not on-chain',
+        'Real on-chain join requires deployed challenge program');
+    }
+  }else{
+    showToast('✅','Joined! — Demo challenge',
+      'Welcome '+compProfile.displayName+
+      '! · Note: on-chain join requires a real deployed challenge');
   }
-  compChallenge=ch;compJoined=true;
+
+  compChallenge=ch;
+  compJoined=true;
   sessionStorage.setItem('comp_joined','true');
   sessionStorage.setItem('comp_challenge',JSON.stringify(ch));
   showCompDashboard();
@@ -1869,9 +1908,9 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
 .cc-stat{font-size:12px;color:var(--muted);}
 .cc-stat span{color:var(--text);font-weight:600;}
 .cc-reward-pill{padding:6px 14px;border-radius:20px;font-family:var(--font-mono);font-size:12px;font-weight:700;background:rgba(255,200,74,.12);color:var(--gold);border:1px solid rgba(255,200,74,.2);}
-.comp-dash{flex:1;display:flex;}
-.comp-sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:28px 16px;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;}
-.comp-main{flex:1;padding:32px;overflow-y:auto;}
+.comp-dash{flex:1;display:flex;width:100%;min-height:100vh;}
+.comp-sidebar{width:220px;min-width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);padding:28px 16px;display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow-y:auto;}
+.comp-main{flex:1;min-width:0;padding:28px 32px;overflow-y:auto;max-width:calc(100vw - 220px);}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:36px;width:100%;max-width:480px;animation:fadeUp .3s ease;}
 .modal-box h2{font-size:24px;font-weight:800;margin-bottom:8px;}
@@ -1938,10 +1977,10 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
         <div class="nav-item" onclick="goLanding()"><span class="nav-icon">←</span> Home</div>
       </div>
       <div class="sidebar-challenge" style="margin-top:16px">
-        <div class="sc-title">Active challenge</div>
+        <div class="sc-title" data-i18n="Active challenge">Active challenge</div>
         <div class="sc-name" id="comp-challenge-name">—</div>
         <div class="sc-timer" id="comp-timer">—</div>
-        <div class="sc-timer-label">remaining</div>
+        <div class="sc-timer-label" data-i18n="remaining">remaining</div>
         <div class="progress-bar"><div class="progress-fill" id="comp-progress" style="width:23%"></div></div>
       </div>
     </div>
@@ -1951,7 +1990,7 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
         <div class="topbar"><div class="topbar-title" data-i18n="Leaderboard">Leaderboard</div><div class="topbar-right"><div class="tag tag-live">● Live</div><div class="tag tag-day" id="comp-day-tag">Day 7</div></div></div>
         <div class="stat-row">
           <div class="stat-card" style="--accent-bar:var(--accent)"><div class="stat-icon">👥</div><div class="stat-val" id="comp-stat-participants">—</div><div class="stat-label" data-i18n="Participants">Participants</div></div>
-          <div class="stat-card" style="--accent-bar:var(--accent2)"><div class="stat-icon">🗳️</div><div class="stat-val">86<span style="font-size:14px">%</span></div><div class="stat-label">Avg consensus</div></div>
+          <div class="stat-card" style="--accent-bar:var(--accent2)"><div class="stat-icon">🗳️</div><div class="stat-val">86<span style="font-size:14px">%</span></div><div class="stat-label" data-i18n="Avg consensus">Avg consensus</div></div>
           <div class="stat-card" style="--accent-bar:var(--gold)"><div class="stat-icon">💰</div><div class="stat-val" id="comp-stat-reward">—</div><div class="stat-label" data-i18n="Prize pool">Prize pool</div></div>
           <div class="stat-card" style="--accent-bar:var(--accent3)"><div class="stat-icon">📍</div><div class="stat-val" id="comp-my-rank">#—</div><div class="stat-label" data-i18n="Your rank">Your rank</div></div>
         </div>
@@ -1976,11 +2015,11 @@ document.addEventListener('DOMContentLoaded',function(){if(sessionStorage.getIte
           <div class="pow-card"><div style="font-size:14px;font-weight:700;margin-bottom:4px">🐙 GitHub</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Commits · PRs · reviews</div><input id="pow-github-input" type="text" placeholder="GitHub username" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--text);outline:none;margin-bottom:8px"><button class="btn btn-secondary" style="font-size:11px;padding:7px 14px;width:100%;justify-content:center" onclick="connectGithubPow()">Connect GitHub</button></div>
         </div>
         <div class="pow-card" style="background:rgba(0,229,176,.04);border-color:rgba(0,229,176,.2)">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div><div style="font-size:14px;font-weight:700">Today's score</div><div style="font-size:12px;color:var(--muted)">Based on connected sources</div></div><div style="font-family:var(--font-mono);font-size:36px;font-weight:700;color:var(--accent2)" id="pow-score-display">—</div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div><div style="font-size:14px;font-weight:700" data-i18n="Today's score">Today's score</div><div style="font-size:12px;color:var(--muted)" data-i18n="Based on connected sources">Based on connected sources</div></div><div style="font-family:var(--font-mono);font-size:36px;font-weight:700;color:var(--accent2)" id="pow-score-display">—</div></div>
           <div class="activity-chips" id="pow-activity-summary" style="margin-bottom:16px"></div>
           <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitPow()">⛓️ Commit score on-chain (Day <span id="pow-day-num">0</span>)</button>
         </div>
-        <div class="chain-card" style="margin-top:16px"><div style="font-size:14px;font-weight:700;margin-bottom:16px">Committed history</div><div id="pow-history"></div></div>
+        <div class="chain-card" style="margin-top:16px"><div style="font-size:14px;font-weight:700;margin-bottom:16px" data-i18n="Committed history">Committed history</div><div id="pow-history"></div></div>
       </div>
 
       <div class="page" id="comp-page-profile">
