@@ -19,7 +19,31 @@ const DISC = {
 // ─── STATE ─────────────────────────────────────────────────
 let connection   = null;
 let walletPubkey = null;
-let _calendarToken = null; // Google OAuth token
+let _calendarToken = null;
+let _solPrice    = null; // cached SOL/USD price
+
+// ─── SOL PRICE ─────────────────────────────────────────────
+async function fetchSolPrice() {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    const data = await res.json();
+    _solPrice = data?.solana?.usd || null;
+    return _solPrice;
+  } catch {
+    // fallback to a rough estimate if CoinGecko is unavailable
+    _solPrice = 150;
+    return _solPrice;
+  }
+}
+
+// Call on load
+fetchSolPrice();
+
+// Convert USD amount to SOL using live price
+function usdToSol(usdAmount) {
+  if (!_solPrice) return null;
+  return (usdAmount / _solPrice).toFixed(3);
+}
 
 // ─── SOLANA HELPERS ────────────────────────────────────────
 function pk(s) { return new window.solanaWeb3.PublicKey(s); }
@@ -502,3 +526,77 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!p) updateChainStatus('disconnected');
   });
 });
+
+// ─── GITHUB ACTIVITY ──────────────────────────────────────
+// Fetches public commit activity for a GitHub user (no auth needed for public repos)
+async function fetchGithubActivity(username) {
+  if (!username) return null;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    // GitHub Events API — public, no token needed
+    const res = await fetch(`https://api.github.com/users/${username}/events/public?per_page=30`);
+    if (!res.ok) return null;
+    const events = await res.json();
+
+    const todayEvents = events.filter(e => e.created_at?.slice(0,10) === today);
+    const pushes  = todayEvents.filter(e => e.type === 'PushEvent').length;
+    const commits = todayEvents.filter(e => e.type === 'PushEvent')
+      .reduce((s, e) => s + (e.payload?.commits?.length || 0), 0);
+    const prs     = todayEvents.filter(e => e.type === 'PullRequestEvent').length;
+    const reviews = todayEvents.filter(e => e.type === 'PullRequestReviewEvent').length;
+
+    const activity = { pushes, commits, prs, reviews, source: 'GitHub', date: today };
+
+    // Merge with existing activity
+    const existing = JSON.parse(sessionStorage.getItem('today_activity') || '{}');
+    const merged = { ...existing, ...activity };
+    sessionStorage.setItem('today_activity', JSON.stringify(merged));
+
+    // Update score
+    const score = computeScore(merged);
+    sessionStorage.setItem('today_computed_score', score.toString());
+
+    showToast('🐙', `GitHub: ${commits} commits today`,
+      `${prs} PRs · ${reviews} reviews · score: ${score} pts`);
+
+    // Update UI
+    updateActivityChips(merged);
+    if (typeof buildVoteCards === 'function') buildVoteCards();
+    return activity;
+  } catch(e) {
+    console.error('GitHub fetch:', e);
+    return null;
+  }
+}
+
+// ─── SCORE COMPUTATION ─────────────────────────────────────
+function computeScore(activity) {
+  if (!activity) return Math.round(50 + Math.random() * 50);
+  return Math.round(
+    (activity.meetings    || 0) * 25 +
+    (activity.totalEvents || 0) * 8  +
+    (activity.commits     || 0) * 15 +
+    (activity.prs         || 0) * 30 +
+    (activity.reviews     || 0) * 20 +
+    10 // base score for showing up
+  );
+}
+
+// ─── UPDATE ACTIVITY CHIPS EVERYWHERE ─────────────────────
+function updateActivityChips(activity) {
+  const containers = ['gcal-activity', 'gcal-activity-dashboard'];
+  const html = [
+    activity.meetings    != null ? `<div class="chip">📅 Meetings <span class="chip-val">${activity.meetings}</span></div>` : '',
+    activity.totalEvents != null ? `<div class="chip">📆 Events <span class="chip-val">${activity.totalEvents}</span></div>` : '',
+    activity.commits     != null ? `<div class="chip">🐙 Commits <span class="chip-val">${activity.commits}</span></div>` : '',
+    activity.prs         != null ? `<div class="chip">🔀 PRs <span class="chip-val">${activity.prs}</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  containers.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+// Expose for HTML buttons
+window.fetchGithubActivity = fetchGithubActivity;
