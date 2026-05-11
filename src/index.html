@@ -935,6 +935,11 @@ input[type=range]::-webkit-slider-thumb {
       <div class="nav-item" onclick="showPage('admin',this)"><span class="nav-icon">⚙️</span>Settings</div>
     </div>
 
+    <div style="margin-bottom:12px">
+      <button id="gcal-btn" class="btn btn-secondary" style="font-size:11px;padding:8px 14px;width:100%;justify-content:center;" onclick="handleGCalBtn()">
+        &#x1F4C5; Connect Calendar
+      </button>
+    </div>
     <div class="sidebar-challenge">
       <div class="sc-title">Active challenge</div>
       <div class="sc-name" id="sb-name">Q2 Innovation Sprint</div>
@@ -1322,22 +1327,31 @@ const VOTE_DATA = [
 ];
 
 function buildVoteCards() {
+  // Try to use real calendar data for the first card (own activity)
+  const storedActivity = sessionStorage.getItem('today_activity');
+  const myActivity = storedActivity ? JSON.parse(storedActivity) : null;
+
   let html = '';
   VOTE_DATA.forEach((v,i)=>{
+    const isOwn = i === 0 && myActivity; // first card = own activity from calendar
+    const meetings = isOwn ? myActivity.meetings : v.meetings;
+    const total    = isOwn ? myActivity.totalEvents : v.meetings + v.docs;
+    const source   = isOwn ? myActivity.source : 'estimated';
     html += `
     <div class="vote-card" id="vcard-${i}">
       <div class="vote-card-header">
         <div>
-          <div class="vote-wallet">${v.addr}</div>
-          <div class="vote-day" style="margin-top:4px;font-size:12px;color:var(--muted)">Activity summary — Day 7</div>
+          <div class="vote-wallet">${v.addr}${i===2?'<span class="wallet-you">you</span>':''}</div>
+          <div class="vote-day" style="margin-top:4px;font-size:12px;color:var(--muted)">Activity — Day 7 ${isOwn?'<span style=\'color:var(--accent2)\'>● live from '+source+'</span>':''}</div>
         </div>
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">anonymous</div>
       </div>
       <div class="activity-chips">
         <div class="chip">💬 Messages <span class="chip-val">${v.msgs}</span></div>
-        <div class="chip">📅 Meetings <span class="chip-val">${v.meetings}</span></div>
+        <div class="chip">📅 Meetings <span class="chip-val">${meetings}</span></div>
         <div class="chip">📄 Docs edited <span class="chip-val">${v.docs}</span></div>
         <div class="chip">📧 Emails <span class="chip-val">${v.emails}</span></div>
+        ${isOwn?'<div class="chip" style="border-color:rgba(0,229,176,0.4)">📆 Total events <span class="chip-val">'+total+'</span></div>':''}
       </div>
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Was this a productive day? Your vote is anonymous and wallet-signed on-chain.</p>
       <div class="vote-actions">
@@ -1555,6 +1569,20 @@ window.launch = async function() {
 </script>
 <script>
 // ─── ON-CHAIN ACTION HANDLERS ──────────────────────────────
+function handleGCalBtn() {
+  const btn = document.getElementById('gcal-btn');
+  if (!btn) return;
+  if (typeof connectGoogleCalendar === 'function') {
+    connectGoogleCalendar();
+  } else {
+    showToast('❌','Google API not ready','Refresh the page');
+  }
+}
+
+// Override fetchCalendarActivity to also update vote cards
+const _origFetchCal = window.fetchCalendarActivity;
+window._calendarConnected = false;
+
 async function handleRegister() {
   if (!walletPubkey) {
     showToast('⚠️', 'Connect wallet first', 'Click Connect Phantom in the sidebar');
@@ -1569,15 +1597,22 @@ async function handleRegister() {
 
 async function handleCommitScore() {
   if (!walletPubkey) {
-    showToast('⚠️', 'Connect wallet first', '');
+    showToast('⚠️', 'Connect Phantom first', '');
     return;
   }
-  // Compute a simulated score based on mock activity
-  const score = Math.round(80 + Math.random() * 120);
-  const dayElapsed = 7; // demo: day 7
-  const result = await txCommitDailyScore(score, dayElapsed);
+  // Use real calendar score if available, otherwise compute from mock
+  const realScore = sessionStorage.getItem('today_computed_score');
+  const score = realScore ? parseInt(realScore) : Math.round(80 + Math.random() * 120);
+  const source = realScore ? 'Google Calendar' : 'estimated';
+
+  // Day = elapsed days since challenge start (use sessionStorage or default to 0)
+  const challengePDA = sessionStorage.getItem('challengePDA');
+  const day = 0; // Day 0 for demo — in production: Math.floor((Date.now()/1000 - startTime) / 86400)
+
+  showToast('⏳', 'Committing score…', source + ' · ' + score + ' pts · signing in Phantom');
+  const result = await txCommitDailyScore(score, day);
   if (result) {
-    showToast('✅', 'Score committed!', 'Day ' + dayElapsed + ' · ' + score + ' pts (hash on-chain)');
+    showToast('✅', 'Score committed on-chain!', 'Day ' + day + ' · ' + score + ' pts · ' + source);
   }
 }
 
